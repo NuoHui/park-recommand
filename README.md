@@ -1,12 +1,13 @@
 # 🏞️ 深圳公园景点推荐 CLI Agent
 
-一个功能强大的命令行 Agent，为深圳用户智能推荐公园和爬山景点。通过多轮对话交互了解用户偏好，调用 LLM 进行决策，集成地图 API 获取实时地点信息。
+一个功能强大的命令行 Agent，为深圳用户智能推荐公园和爬山景点。基于 LLM 智能决策，集成高德地图 API 获取实时地点信息，返回 **Top 5 推荐结果**。
 
 ## ✨ 核心特性
 
-- **🤖 LLM 智能推荐**: 集成 OpenAI/Claude API，进行智能决策
-- **💬 多轮对话交互**: 逐步收集用户偏好，维持完整上下文
-- **🗺️ 地图数据集成**: 实时获取地点信息（距离、评分、难度等）
+- **🤖 LLM 智能推荐**: 集成 OpenAI/Claude API，支持多轮对话交互
+- **⭐ Top 5 推荐**: 每次推荐返回最优的 5 个景点结果
+- **🗺️ 实时地图数据**: 高德地图 Web Service API，获取距离、评分、类型等信息
+- **💬 多轮对话交互**: 通过对话逐步了解用户偏好，维持完整上下文
 - **⚡ 高性能缓存**: 两层缓存设计（内存 + 磁盘），减少 API 调用
 - **🎨 美观 CLI 界面**: 结构化输出，清晰信息呈现
 - **📝 完整日志系统**: Winston 日志记录，便于调试
@@ -17,7 +18,7 @@
 
 - Node.js 18+
 - npm 或 yarn
-- OpenAI/Claude API Key
+- OpenAI 或 Claude API Key
 - 高德地图 Web Service API Key
 
 ### 5 分钟快速开始
@@ -36,67 +37,212 @@ cp .env.example .env
 npm run dev
 ```
 
-详细说明请参考 **[快速开始指南](./docs/getting-started/installation.md)**
+### 基本使用
 
-## 📖 文档导航
+```bash
+# 运行 CLI 应用
+npm run dev
 
-👉 **[查看完整文档导航](./docs/README.md)** - 所有文档已分类整理
-
-### 快速链接
-
-- **测试运行**: [如何运行测试](./docs/guides/HOW-TO-RUN-TESTS.md)
-- **快速参考**: [测试快速指南](./docs/guides/QUICK-TEST-GUIDE.md)
-- **LLM 开发**: [LLM 完整指南](./docs/guides/LLM-TESTING-GUIDE.md)
-- **Git 提交**: [Git Hooks 配置](./docs/guides/GIT-HOOKS-GUIDE.md)
-- **故障排除**: [问题排查指南](./docs/guides/TROUBLESHOOTING.md)
-- **设计文档**: [系统设计审查](./docs/reports/DESIGN-REVIEW.md)
-
-### 文档结构
-
-```
-docs/
-├── README.md              ← 文档概览（首先查看）
-├── INDEX.md               ← 完整文档索引
-├── guides/                # 日常使用指南（15+ 文件）
-├── reports/               # 技术报告和分析（22+ 文件）
-├── specs/                 # 技术规范和集成（8+ 文件）
-└── archives/              # 历史文档（5+ 文件）
+# 输入你的偏好，获取 Top 5 推荐
+# 示例: "我喜欢山景，近距离，难度中等"
 ```
 
-## 🏗️ 项目结构
+## 🧪 测试
+
+项目采用完整的单元测试框架，支持快速验证核心功能：
+
+```bash
+# 运行所有单元测试
+npm test
+
+# 运行特定测试
+npm run test:unit      # 全部单元测试
+npm run test:amap      # 高德地图 API 测试
+npm run test:llm       # LLM 功能测试
+
+# 编译和测试
+npm run build          # 编译 TypeScript
+```
+
+### 测试覆盖
+
+| 测试套件 | 功能 | 测试数 | 状态 |
+|---------|------|-------|------|
+| **高德客户端** | 初始化、连接、基础功能 | 3 | ✅ |
+| **POI 搜索** | 文本搜索、多页查询、数据完整性 | 3 | ✅ |
+| **地理编码** | 地址编码、反向编码 | 2 | ✅ |
+| **距离计算** | 单次、批量计算 | 2 | ✅ |
+| **Top 5 推荐** ⭐ | Top 5 限制、边界处理、数据富集 | 3 | ✅ |
+| **LLM 功能** | 消息处理、推荐生成、结果解析 | 7+ | ✅ |
+| **总计** | | **14+** | **✅** |
+
+## 📂 项目结构
 
 ```
 src/
 ├── cli/                    # CLI 框架和命令
+│   └── commands/          # 推荐、帮助等命令
 ├── dialogue/              # 多轮对话管理
-├── llm/                   # LLM 客户端和集成
-├── map/                   # 地图 API 集成
-├── cache/                 # 缓存管理系统
+├── llm/                   # LLM 客户端和引擎
+├── map/                   # 高德地图 API 集成
+├── cache/                 # 缓存管理（内存+磁盘）
+├── config/                # 配置管理（环境变量、常量）
 ├── types/                 # TypeScript 类型定义
 ├── utils/                 # 工具函数库
-├── config/                # 配置管理
+├── __tests__/             # 单元测试
+│   └── unit/             # 单元测试用例
 └── index.ts               # 应用入口
 ```
 
-## 🔧 常见命令
+## 🔧 常用命令
+
+### 开发命令
 
 ```bash
-npm run dev       # 开发模式（热重载）
-npm run build     # 编译 TypeScript
-npm start         # 生产模式运行
-npm run lint      # 代码检查
-npm run format    # 格式化代码
-npm test          # 运行测试
+npm run dev           # 开发模式（热重载）
+npm run dev:build     # 编译后链接到全局
+npm run dev:watch     # 监视源文件变化
 ```
 
-## 📝 许可证
+### 构建和运行
+
+```bash
+npm run build         # 编译 TypeScript → dist/
+npm start             # 运行编译后的应用
+npm run clean         # 清理 dist/ 目录
+```
+
+### 代码质量
+
+```bash
+npm run lint          # ESLint 检查
+npm run format        # Prettier 格式化
+```
+
+### 测试和诊断
+
+```bash
+npm test              # 运行所有单元测试
+npm run test:unit     # 单元测试（amap + llm）
+npm run test:amap     # 高德地图 API 测试
+npm run test:llm      # LLM 功能测试
+npm run diagnose:llm  # LLM 诊断脚本
+npm run trace:llm     # LLM 调用追踪
+```
+
+## 🎯 Top 5 推荐工作流
+
+1. **用户输入** → CLI 接收用户偏好
+2. **多轮对话** → Dialogue Manager 收集详细需求
+3. **LLM 决策** → LLM 分析偏好，生成推荐决策
+4. **地图查询** → 高德 API 搜索相关景点（POI）
+5. **Top 5 筛选** → 从所有结果中选出最优的 5 个
+6. **数据富集** → 补充距离、评分、商圈等信息
+7. **美化输出** → CLI 格式化展示给用户
+
+## 📊 系统架构
+
+```
+用户输入
+   ↓
+[CLI Interface]
+   ↓
+[Dialogue Manager] ← 维持对话上下文
+   ↓
+[LLM Engine] ← 智能决策
+   ↓
+[Recommendation Command]
+   ↓
+[Amap Client] ← 高德 API 查询
+   ↓
+[POI Search Results]
+   ↓
+[Top 5 Filter] ← 筛选最优结果
+   ↓
+[Cache Manager] ← 两层缓存（内存+磁盘）
+   ↓
+[Output Formatter]
+   ↓
+用户显示
+```
+
+## 🔑 核心模块说明
+
+### LLM 集成 (`src/llm/`)
+- **Client**: OpenAI/Claude API 封装
+- **Engine**: 推荐逻辑和决策生成
+- **支持**: 多轮对话、上下文管理、流式响应
+
+### 高德地图 (`src/map/`)
+- **Client**: 高德 Web Service API 封装
+- **Service**: POI 搜索、地理编码、距离计算
+- **Top 5**: 智能筛选和排序算法
+
+### 缓存系统 (`src/cache/`)
+- **两层缓存**: 内存（快速）+ 磁盘（持久化）
+- **过期策略**: 不同类型数据的 TTL 配置
+- **去重**: 避免重复推荐结果
+
+### 对话管理 (`src/dialogue/`)
+- **多轮交互**: 维持完整对话历史
+- **上下文**: 记录用户偏好和决策过程
+
+## 📝 环境变量配置
+
+创建 `.env` 文件，配置以下变量：
+
+```env
+# LLM 配置
+OPENAI_API_KEY=your-openai-key
+CLAUDE_API_KEY=your-claude-key
+LLM_PROVIDER=openai              # 或 claude
+
+# 高德地图配置
+AMAP_API_KEY=your-amap-key
+AMAP_BASE_URL=https://restapi.amap.com/v3
+
+# 应用配置
+APP_NAME=深圳公园景点推荐 Agent
+LOG_LEVEL=info                   # debug, info, warn, error
+```
+
+## 🐛 故障排除
+
+### 高德 API 频率限制
+
+如果遇到 `CUQPS_HAS_EXCEEDED_THE_LIMIT (10021)` 错误，这是正常的 API 限制。解决方案：
+
+1. 等待片刻后重试
+2. 检查 API 配额和月度使用量
+3. 考虑升级高德地图服务等级
+
+### LLM 连接失败
+
+- 检查 API Key 是否正确配置
+- 验证网络连接和防火墙设置
+- 查看日志: `npm run diagnose:llm`
+
+### 缓存问题
+
+- 清理缓存: `rm -rf ~/.park-recommender/cache/`
+- 使用诊断脚本: `npm run trace:llm`
+
+## 📚 相关文档
+
+- **快速开始**: 查看本文档的"快速开始"章节
+- **API 文档**: 参考代码注释和类型定义
+- **测试指南**: 运行 `npm run test:amap` 查看测试用例
+
+## 📄 许可证
 
 MIT
 
 ## 🤝 贡献
 
-欢迎提交 Issue 和 Pull Request！详见 [贡献指南](./docs/development/contributing.md)
+欢迎提交 Issue 和 Pull Request！
 
 ---
 
-**需要帮助？** 查看 [完整文档](./docs/README.md) 或 [常见问题](./docs/guides/troubleshooting.md)
+**版本**: 1.0.0  
+**最后更新**: 2024-03-28  
+**维护者**: Park Recommender Team
