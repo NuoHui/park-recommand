@@ -20,7 +20,7 @@ export async function testLLMClient() {
   tests.push(
     (async () => {
       try {
-        const provider = env.llmProvider as 'openai' | 'anthropic';
+        const provider = env.llmProvider as 'openai' | 'anthropic' | 'aliyun';
         let apiKey: string;
         let model: string;
 
@@ -30,6 +30,9 @@ export async function testLLMClient() {
         } else if (provider === 'anthropic') {
           apiKey = env.anthropicApiKey || '';
           model = env.anthropicModel;
+        } else if (provider === 'aliyun') {
+          apiKey = env.aliyunApiKey || '';
+          model = env.aliyunModel;
         } else {
           throw new Error(`Unsupported provider: ${provider}`);
         }
@@ -67,7 +70,7 @@ export async function testLLMClient() {
   tests.push(
     (async () => {
       try {
-        const provider = env.llmProvider as 'openai' | 'anthropic';
+        const provider = env.llmProvider as 'openai' | 'anthropic' | 'aliyun';
         let apiKey: string;
         let model: string;
 
@@ -77,6 +80,9 @@ export async function testLLMClient() {
         } else if (provider === 'anthropic') {
           apiKey = env.anthropicApiKey || '';
           model = env.anthropicModel;
+        } else if (provider === 'aliyun') {
+          apiKey = env.aliyunApiKey || '';
+          model = env.aliyunModel;
         } else {
           throw new Error(`Unsupported provider: ${provider}`);
         }
@@ -129,7 +135,7 @@ export async function testLLMClient() {
   tests.push(
     (async () => {
       try {
-        const provider = env.llmProvider as 'openai' | 'anthropic';
+        const provider = env.llmProvider as 'openai' | 'anthropic' | 'aliyun';
         let apiKey: string;
         let model: string;
 
@@ -139,6 +145,9 @@ export async function testLLMClient() {
         } else if (provider === 'anthropic') {
           apiKey = env.anthropicApiKey || '';
           model = env.anthropicModel;
+        } else if (provider === 'aliyun') {
+          apiKey = env.aliyunApiKey || '';
+          model = env.aliyunModel;
         } else {
           throw new Error(`Unsupported provider: ${provider}`);
         }
@@ -216,7 +225,7 @@ export async function testLLMEngine() {
   tests.push(
     (async () => {
       try {
-        const provider = env.llmProvider as 'openai' | 'anthropic';
+        const provider = env.llmProvider as 'openai' | 'anthropic' | 'aliyun';
         let apiKey: string;
         let model: string;
 
@@ -226,6 +235,9 @@ export async function testLLMEngine() {
         } else if (provider === 'anthropic') {
           apiKey = env.anthropicApiKey || '';
           model = env.anthropicModel;
+        } else if (provider === 'aliyun') {
+          apiKey = env.aliyunApiKey || '';
+          model = env.aliyunModel;
         } else {
           throw new Error(`Unsupported provider: ${provider}`);
         }
@@ -261,7 +273,7 @@ export async function testLLMEngine() {
   tests.push(
     (async () => {
       try {
-        const provider = env.llmProvider as 'openai' | 'anthropic';
+        const provider = env.llmProvider as 'openai' | 'anthropic' | 'aliyun';
         let apiKey: string;
         let model: string;
 
@@ -271,6 +283,9 @@ export async function testLLMEngine() {
         } else if (provider === 'anthropic') {
           apiKey = env.anthropicApiKey || '';
           model = env.anthropicModel;
+        } else if (provider === 'aliyun') {
+          apiKey = env.aliyunApiKey || '';
+          model = env.aliyunModel;
         } else {
           throw new Error(`Unsupported provider: ${provider}`);
         }
@@ -316,7 +331,7 @@ export async function testLLMEngine() {
   tests.push(
     (async () => {
       try {
-        const provider = env.llmProvider as 'openai' | 'anthropic';
+        const provider = env.llmProvider as 'openai' | 'anthropic' | 'aliyun';
         let apiKey: string;
         let model: string;
 
@@ -326,6 +341,9 @@ export async function testLLMEngine() {
         } else if (provider === 'anthropic') {
           apiKey = env.anthropicApiKey || '';
           model = env.anthropicModel;
+        } else if (provider === 'aliyun') {
+          apiKey = env.aliyunApiKey || '';
+          model = env.aliyunModel;
         } else {
           throw new Error(`Unsupported provider: ${provider}`);
         }
@@ -376,7 +394,7 @@ export async function testLLMEngine() {
   tests.push(
     (async () => {
       try {
-        const provider = env.llmProvider as 'openai' | 'anthropic';
+        const provider = env.llmProvider as 'openai' | 'anthropic' | 'aliyun';
         let apiKey: string;
         let model: string;
 
@@ -386,6 +404,9 @@ export async function testLLMEngine() {
         } else if (provider === 'anthropic') {
           apiKey = env.anthropicApiKey || '';
           model = env.anthropicModel;
+        } else if (provider === 'aliyun') {
+          apiKey = env.aliyunApiKey || '';
+          model = env.aliyunModel;
         } else {
           throw new Error(`Unsupported provider: ${provider}`);
         }
