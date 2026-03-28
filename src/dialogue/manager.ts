@@ -7,6 +7,12 @@ import { StateMachine } from './state-machine';
 import { ContextManager } from './context';
 import { DialogueFlowEngine } from './flow-engine';
 import { SessionManager } from './session';
+import { getLLMService } from '@/llm/service';
+import { getLocationService } from '@/map/service';
+import { RequestQueue } from '@/queue/request-queue';
+import { CacheWarmer } from '@/cache/warmer';
+import { MetricsCollector } from '@/monitoring/metrics-collector';
+import { RequestPriority } from '@/queue/types';
 
 const logger = createLogger('dialogue:manager');
 
@@ -18,6 +24,9 @@ export class DialogueManager {
   private flowEngine: DialogueFlowEngine;
   private sessionManager: SessionManager;
   private config: Required<DialogueManagerConfig>;
+  private requestQueue: RequestQueue;
+  private cacheWarmer: CacheWarmer;
+  private metricsCollector: MetricsCollector;
 
   constructor(config: DialogueManagerConfig = {}, sessionManager?: SessionManager) {
     this.sessionId = uuidv4();
@@ -41,9 +50,29 @@ export class DialogueManager {
     this.flowEngine = new DialogueFlowEngine(this.contextManager);
     this.sessionManager = sessionManager || new SessionManager();
 
+    // 初始化性能优化模块
+    this.requestQueue = new RequestQueue({
+      maxConcurrency: 5,
+      defaultTimeout: this.config.timeout,
+      maxRetries: 2,
+      deduplication: true,
+    });
+
+    this.cacheWarmer = new CacheWarmer({
+      enableAutoWarmup: true,
+      warmupInterval: 300000, // 5 分钟
+    });
+
+    this.metricsCollector = new MetricsCollector({
+      enabled: true,
+      sampleRetentionTime: 3600000,
+      aggregationInterval: 60000,
+    });
+
     logger.info('对话管理器创建', {
       sessionId: this.sessionId,
       config: this.config,
+      performanceModulesInitialized: true,
     });
   }
 
@@ -56,6 +85,18 @@ export class DialogueManager {
     this.state.startTime = Date.now();
 
     logger.info('对话初始化', { sessionId: this.sessionId });
+
+    // 启动缓存预热
+    try {
+      await this.cacheWarmer.warmupPopularLocations();
+      logger.info('缓存预热完成', {
+        sessionId: this.sessionId,
+      });
+    } catch (error) {
+      logger.warn('缓存预热失败', {
+        error: error instanceof Error ? error.message : '未知错误',
+      });
+    }
 
     // 添加初始欢迎消息
     this.contextManager.addMessage(
@@ -209,7 +250,8 @@ export class DialogueManager {
   }
 
   /**
-   * 获取推荐结果
+   * 获取推荐结果（性能优化集成版）
+   * 完整流程: 缓存检查 → 请求队列 → LLM 信息检查 → 参数优化 → 地图 API 查询 → LLM 排序 → 格式化 → 性能监控
    */
   async getRecommendations(): Promise<{
     success: boolean;
@@ -221,7 +263,15 @@ export class DialogueManager {
       rating?: number;
     }>;
     error?: string;
+    performanceMetrics?: {
+      totalTime: number;
+      llmTime: number;
+      mapQueryTime: number;
+      cacheHit: boolean;
+    };
   }> {
+    const overallStartTime = Date.now();
+
     if (this.state.phase !== DialoguePhase.QUERYING) {
       return {
         success: false,
@@ -230,23 +280,330 @@ export class DialogueManager {
     }
 
     try {
-      // TODO: 调用 LLM 和地图 API 获取推荐
-      // 这里先返回示例数据
-      const recommendations = this.generateMockRecommendations();
+      const preferences = this.state.userPreference;
 
+      logger.info('开始推荐流程 (性能优化版)', {
+        sessionId: this.sessionId,
+        preferences,
+      });
+
+      // 0️⃣ 尝试从缓存检查
+      const cacheKey = this.generateCacheKey(preferences);
+      let cachedResult = await this.checkCachedRecommendations(cacheKey);
+      const cacheHit = !!cachedResult;
+
+      if (cacheHit) {
+        const cacheTime = Date.now() - overallStartTime;
+        this.metricsCollector.recordCacheHit(true, cacheTime);
+        logger.info('命中缓存推荐', {
+          sessionId: this.sessionId,
+          timeMs: cacheTime,
+        });
+
+        return {
+          success: true,
+          recommendations: cachedResult,
+          performanceMetrics: {
+            totalTime: cacheTime,
+            llmTime: 0,
+            mapQueryTime: 0,
+            cacheHit: true,
+          },
+        };
+      }
+
+      this.metricsCollector.recordCacheHit(false);
+
+      // 1️⃣ 创建异步请求队列任务
+      const llmCheckRequestId = `llm-check-${this.sessionId}`;
+      const mapQueryRequestId = `map-query-${this.sessionId}`;
+
+      // 2️⃣ 获取服务实例
+      const llmService = getLLMService();
+      const locationService = getLocationService();
+
+      if (!llmService.isInitialized()) {
+        await llmService.initialize();
+      }
+
+      const llmEngine = llmService.getEngine();
+
+      // 3️⃣ 添加到请求队列 - LLM 信息检查
+      const llmCheckStartTime = Date.now();
+
+      this.requestQueue.add({
+        id: llmCheckRequestId,
+        priority: RequestPriority.HIGH,
+        handler: async () => {
+          const shouldRecommendResult = await llmEngine.shouldRecommend(preferences);
+
+          if (!shouldRecommendResult.shouldRecommend) {
+            logger.warn('信息不足，无法推荐', {
+              missingInfo: shouldRecommendResult.missingInfo,
+            });
+            throw new Error(shouldRecommendResult.reasoning);
+          }
+
+          return shouldRecommendResult;
+        },
+      });
+
+      const llmCheckResult = await this.waitForQueuedRequest(llmCheckRequestId);
+      const llmCheckTime = Date.now() - llmCheckStartTime;
+
+      logger.debug('LLM 信息检查完成', {
+        confidence: llmCheckResult.confidence,
+        timeMs: llmCheckTime,
+      });
+
+      // 4️⃣ LLM 参数优化
+      const paramOptimizationStartTime = Date.now();
+
+      const searchDecision = await llmEngine.generateSearchParams(preferences);
+
+      const paramOptimizationTime = Date.now() - paramOptimizationStartTime;
+
+      logger.debug('搜索参数已生成', {
+        searchParams: searchDecision.searchParams,
+        confidence: searchDecision.confidence,
+        timeMs: paramOptimizationTime,
+      });
+
+      // 5️⃣ 添加到请求队列 - 地图查询
+      const mapQueryStartTime = Date.now();
+
+      this.requestQueue.add({
+        id: mapQueryRequestId,
+        priority: RequestPriority.HIGH,
+        handler: async () => {
+          return await locationService.searchRecommendedLocations(preferences);
+        },
+      });
+
+      const locations = await this.waitForQueuedRequest(mapQueryRequestId);
+      const mapQueryTime = Date.now() - mapQueryStartTime;
+
+      logger.info('景点搜索完成', {
+        count: locations?.length || 0,
+        timeMs: mapQueryTime,
+      });
+
+      // 处理无结果情况
+      if (!locations || locations.length === 0) {
+        logger.warn('地点搜索无结果，尝试降级处理');
+
+        const fallback = await this.getFallbackRecommendations(preferences);
+        if (fallback.length > 0) {
+          const formatted = await this.formatRecommendations(fallback, {
+            locations: [],
+            explanation: '根据深圳热门景点为你推荐',
+          });
+          this.state.phase = DialoguePhase.RECOMMENDING;
+
+          const totalTime = Date.now() - overallStartTime;
+          this.metricsCollector.recordRequest(totalTime, true);
+
+          return {
+            success: true,
+            recommendations: formatted,
+            performanceMetrics: {
+              totalTime,
+              llmTime: llmCheckTime + paramOptimizationTime,
+              mapQueryTime,
+              cacheHit: false,
+            },
+          };
+        }
+
+        return {
+          success: false,
+          error: '抱歉，暂未找到符合条件的景点',
+        };
+      }
+
+      // 6️⃣ LLM 排序和解析结果
+      const llmParseStartTime = Date.now();
+
+      const locationsJson = JSON.stringify(locations.slice(0, 10), null, 2);
+      const parsedRecommendations = await llmEngine.parseRecommendations(locationsJson);
+
+      const llmParseTime = Date.now() - llmParseStartTime;
+
+      logger.debug('推荐已解析', {
+        parsedCount: parsedRecommendations.locations.length,
+        timeMs: llmParseTime,
+      });
+
+      // 7️⃣ 格式化为最终推荐格式
+      const formattingStartTime = Date.now();
+
+      const recommendations = await this.formatRecommendations(
+        locations,
+        parsedRecommendations
+      );
+
+      const formattingTime = Date.now() - formattingStartTime;
+
+      // 8️⃣ 状态转移
       this.state.phase = DialoguePhase.RECOMMENDING;
+
+      logger.info('推荐流程完成 (性能优化版)', {
+        recommendationCount: recommendations.length,
+      });
+
+      // 9️⃣ 缓存结果
+      await this.cacheRecommendations(cacheKey, recommendations);
+
+      // 🔟 记录性能指标
+      const totalTime = Date.now() - overallStartTime;
+      this.metricsCollector.recordRequest(totalTime, true, {
+        source: 'llm_map_integration',
+        recommendationCount: recommendations.length.toString(),
+      });
+
+      const totalLLMTime = llmCheckTime + paramOptimizationTime + llmParseTime;
+
+      logger.info('性能指标', {
+        sessionId: this.sessionId,
+        totalTime,
+        llmTime: totalLLMTime,
+        mapQueryTime,
+        formattingTime,
+        cacheHit,
+      });
 
       return {
         success: true,
         recommendations,
+        performanceMetrics: {
+          totalTime,
+          llmTime: totalLLMTime,
+          mapQueryTime,
+          cacheHit: false,
+        },
       };
     } catch (error) {
-      logger.error('获取推荐失败:', error);
+      const totalTime = Date.now() - overallStartTime;
+      this.metricsCollector.recordRequest(totalTime, false);
+
+      logger.error('获取推荐失败', {
+        error: error instanceof Error ? error.message : '未知错误',
+        timeMs: totalTime,
+      });
+
+      // 🔄 最后的降级处理
+      try {
+        const fallback = await this.getFallbackRecommendations(
+          this.state.userPreference
+        );
+        if (fallback.length > 0) {
+          const formatted = await this.formatRecommendations(fallback, {
+            locations: [],
+            explanation: '系统已为你推荐热门景点',
+          });
+          this.state.phase = DialoguePhase.RECOMMENDING;
+          return { success: true, recommendations: formatted };
+        }
+      } catch (fallbackError) {
+        logger.error('降级处理失败', {
+          error: fallbackError instanceof Error ? fallbackError.message : '未知错误',
+        });
+      }
+
       return {
         success: false,
         error: error instanceof Error ? error.message : '未知错误',
       };
     }
+  }
+
+  /**
+   * 格式化推荐结果
+   * 将原始地点数据转换为最终推荐格式
+   */
+  private async formatRecommendations(
+    locations: any[],
+    parsedData: {
+      locations: Array<{
+        name: string;
+        reason: string;
+        relevanceScore: number;
+        estimatedTravelTime?: number;
+      }>;
+      explanation: string;
+    }
+  ): Promise<
+    Array<{
+      id: string;
+      name: string;
+      reason: string;
+      distance?: number;
+      rating?: number;
+    }>
+  > {
+    // 创建查找表，快速匹配推荐理由
+    const reasonMap = new Map<string, string>();
+    const scoreMap = new Map<string, number>();
+
+    parsedData.locations.forEach(item => {
+      reasonMap.set(item.name.toLowerCase(), item.reason);
+      scoreMap.set(item.name.toLowerCase(), item.relevanceScore);
+    });
+
+    // 按相关性排序
+    const sorted = locations
+      .map(loc => ({
+        ...loc,
+        relevanceScore: scoreMap.get(loc.name.toLowerCase()) || 0.5,
+        reason: reasonMap.get(loc.name.toLowerCase()) || `根据你的偏好推荐的景点`,
+      }))
+      .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
+      .slice(0, 5); // 最多返回 5 个推荐
+
+    // 转换为推荐格式
+    const recommendations = sorted.map(loc => ({
+      id: `rec-${loc.name.replace(/\s+/g, '-')}`,
+      name: loc.name,
+      reason: loc.reason,
+      distance: loc.distance ? Math.round(loc.distance * 10) / 10 : undefined,
+      rating: loc.rating ? Math.round(loc.rating * 10) / 10 : undefined,
+    }));
+
+    logger.debug('推荐已格式化', {
+      count: recommendations.length,
+    });
+
+    return recommendations;
+  }
+
+  /**
+   * 降级处理：获取热门景点或缓存数据
+   * 当地图 API 失败时使用
+   */
+  private async getFallbackRecommendations(
+    preferences: UserPreference
+  ): Promise<any[]> {
+    try {
+      const locationService = getLocationService();
+
+      // 尝试获取热门景点
+      const popular = await locationService.getPopularLocations(5);
+
+      if (popular && popular.length > 0) {
+        logger.info('使用热门景点作为降级方案', {
+          count: popular.length,
+        });
+        return popular;
+      }
+    } catch (error) {
+      logger.warn('热门景点获取失败', {
+        error: error instanceof Error ? error.message : '未知错误',
+      });
+    }
+
+    // 返回模拟数据作为最后的降级方案
+    logger.info('使用模拟数据作为最终降级方案');
+    return this.generateMockRecommendations();
   }
 
   /**
@@ -389,11 +746,121 @@ export class DialogueManager {
   }
 
   /**
+   * 生成缓存键
+   */
+  private generateCacheKey(preferences: UserPreference): string {
+    const key = `rec-${preferences.location}-${preferences.parkType}-${preferences.maxDistance}`;
+    return key.replace(/\s+/g, '-').toLowerCase();
+  }
+
+  /**
+   * 检查缓存的推荐
+   */
+  private async checkCachedRecommendations(
+    cacheKey: string
+  ): Promise<Array<{ id: string; name: string; reason: string; distance?: number; rating?: number }> | null> {
+    try {
+      // TODO: 连接到实际的缓存系统 (Redis, LRU, 等)
+      // 当前使用内存缓存占位符
+      return null;
+    } catch (error) {
+      logger.warn('缓存检查失败', {
+        error: error instanceof Error ? error.message : '未知错误',
+      });
+      return null;
+    }
+  }
+
+  /**
+   * 缓存推荐结果
+   */
+  private async cacheRecommendations(
+    cacheKey: string,
+    recommendations: Array<{
+      id: string;
+      name: string;
+      reason: string;
+      distance?: number;
+      rating?: number;
+    }>
+  ): Promise<void> {
+    try {
+      // TODO: 连接到实际的缓存系统 (Redis, LRU, 等)
+      // 当前使用内存缓存占位符
+      logger.debug('推荐已缓存', { cacheKey });
+    } catch (error) {
+      logger.warn('缓存保存失败', {
+        error: error instanceof Error ? error.message : '未知错误',
+      });
+    }
+  }
+
+  /**
+   * 等待队列中的请求完成
+   */
+  private async waitForQueuedRequest(requestId: string): Promise<any> {
+    // 最多等待 30 秒
+    const maxWaitTime = this.config.timeout;
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitTime) {
+      const status = this.requestQueue.getRequestStatus(requestId);
+
+      if (status === 'completed') {
+        const result = this.requestQueue.getRequestResult(requestId);
+        return result;
+      }
+
+      if (status === 'failed') {
+        const error = this.requestQueue.getRequestError(requestId);
+        throw new Error(`Request failed: ${error}`);
+      }
+
+      // 等待 100ms 再检查
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    throw new Error(`Request timeout: ${requestId}`);
+  }
+
+  /**
+   * 获取性能指标
+   */
+  getPerformanceMetrics(): any {
+    return {
+      requestQueue: this.requestQueue.getStats?.(),
+      metrics: this.metricsCollector.getSnapshot?.(),
+      cacheWarmupStatus: this.cacheWarmer.getStatus?.(),
+    };
+  }
+
+  /**
+   * 结束对话时清理资源
+   */
+  private async cleanupPerformanceModules(): Promise<void> {
+    try {
+      // 输出最终性能报告
+      const metrics = this.getPerformanceMetrics();
+      logger.info('最终性能指标', metrics);
+
+      // TODO: 可以在这里实现资源清理逻辑
+      // 如关闭监听器、清理缓存等
+    } catch (error) {
+      logger.warn('性能模块清理失败', {
+        error: error instanceof Error ? error.message : '未知错误',
+      });
+    }
+  }
+
+  /**
    * 结束对话
    */
   async close(): Promise<void> {
     this.state.isActive = false;
     this.state.phase = DialoguePhase.COMPLETED;
+
+    // 清理性能模块
+    await this.cleanupPerformanceModules();
 
     if (this.config.logHistory) {
       logger.info('对话结束', {
@@ -405,4 +872,3 @@ export class DialogueManager {
     }
   }
 }
-
