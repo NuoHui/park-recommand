@@ -268,6 +268,13 @@ export class LocationService {
   }
 
   /**
+   * 直接调用 POI 搜索（用于参数提取器）
+   */
+  async searchPOI(params: MapSearchParams): Promise<any> {
+    return await this.client.searchPOI(params);
+  }
+
+  /**
    * 获取缓存统计信息
    */
   getCacheStats(): { locations: number; distances: number } {

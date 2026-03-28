@@ -32,7 +32,7 @@ export class DialogueManager {
     this.sessionId = uuidv4();
     this.config = {
       maxTurns: config.maxTurns || 10,
-      timeout: config.timeout || 30000,
+      timeout: config.timeout || 300000, // 5 分钟，充分的 LLM 处理时间
       logHistory: config.logHistory !== false,
     };
 
@@ -326,25 +326,54 @@ export class DialogueManager {
       // 3️⃣ 添加到请求队列 - LLM 信息检查
       const llmCheckStartTime = Date.now();
 
+      logger.debug('[LLM 检查] 开始验证用户偏好', {
+        sessionId: this.sessionId,
+        preferences,
+      });
+
       this.requestQueue.add({
         id: llmCheckRequestId,
         priority: RequestPriority.HIGH,
         executor: async () => {
-          const shouldRecommendResult = await llmEngine.shouldRecommend(preferences);
-
-          if (!shouldRecommendResult.shouldRecommend) {
-            logger.warn('信息不足，无法推荐', {
-              missingInfo: shouldRecommendResult.missingInfo,
+          try {
+            logger.debug('[LLM 检查] 调用 shouldRecommend', {
+              sessionId: this.sessionId,
             });
-            throw new Error(shouldRecommendResult.reasoning);
-          }
+            const shouldRecommendResult = await llmEngine.shouldRecommend(preferences);
 
-          return shouldRecommendResult;
+            if (!shouldRecommendResult.shouldRecommend) {
+              logger.warn('[LLM 检查] 信息不足，无法推荐', {
+                sessionId: this.sessionId,
+                missingInfo: shouldRecommendResult.missingInfo,
+                reasoning: shouldRecommendResult.reasoning,
+              });
+              throw new Error(shouldRecommendResult.reasoning);
+            }
+
+            logger.debug('[LLM 检查] 验证通过', {
+              sessionId: this.sessionId,
+              confidence: shouldRecommendResult.confidence,
+            });
+
+            return shouldRecommendResult;
+          } catch (error) {
+            logger.error('[LLM 检查] 验证失败', {
+              sessionId: this.sessionId,
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            });
+            throw error;
+          }
         },
       });
 
       const llmCheckResult = await this.waitForQueuedRequest(llmCheckRequestId);
       const llmCheckTime = Date.now() - llmCheckStartTime;
+      logger.info('[LLM 检查] 完成', {
+        sessionId: this.sessionId,
+        timeMs: llmCheckTime,
+        confidence: llmCheckResult.confidence,
+      });
 
       logger.debug('LLM 信息检查完成', {
         confidence: llmCheckResult.confidence,
@@ -354,33 +383,76 @@ export class DialogueManager {
       // 4️⃣ LLM 参数优化
       const paramOptimizationStartTime = Date.now();
 
-      const searchDecision = await llmEngine.generateSearchParams(preferences);
-
-      const paramOptimizationTime = Date.now() - paramOptimizationStartTime;
-
-      logger.debug('搜索参数已生成', {
-        searchParams: searchDecision.searchParams,
-        confidence: searchDecision.confidence,
-        timeMs: paramOptimizationTime,
+      logger.debug('[参数优化] 开始生成搜索参数', {
+        sessionId: this.sessionId,
       });
+
+      let paramOptimizationTime = 0;
+      let searchDecision;
+      try {
+        searchDecision = await llmEngine.generateSearchParams(preferences);
+        paramOptimizationTime = Date.now() - paramOptimizationStartTime;
+
+        logger.info('[参数优化] 完成', {
+          sessionId: this.sessionId,
+          timeMs: paramOptimizationTime,
+          searchParams: searchDecision.searchParams,
+          confidence: searchDecision.confidence,
+        });
+      } catch (error) {
+        paramOptimizationTime = Date.now() - paramOptimizationStartTime;
+        logger.error('[参数优化] 失败', {
+          sessionId: this.sessionId,
+          timeMs: paramOptimizationTime,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
 
       // 5️⃣ 添加到请求队列 - 地图查询
       const mapQueryStartTime = Date.now();
+
+      logger.debug('[地图查询] 开始搜索推荐景点', {
+        sessionId: this.sessionId,
+        preferences,
+      });
 
       this.requestQueue.add({
         id: mapQueryRequestId,
         priority: RequestPriority.HIGH,
         executor: async () => {
-          return await locationService.searchRecommendedLocations(preferences);
+          try {
+            logger.debug('[地图查询] 调用高德 API', {
+              sessionId: this.sessionId,
+            });
+            const result = await locationService.searchRecommendedLocations(preferences);
+            logger.debug('[地图查询] 高德 API 返回', {
+              sessionId: this.sessionId,
+              resultCount: result?.length || 0,
+            });
+            return result;
+          } catch (error) {
+            logger.error('[地图查询] 高德 API 失败', {
+              sessionId: this.sessionId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+          }
         },
       });
 
       const locations = await this.waitForQueuedRequest(mapQueryRequestId);
       const mapQueryTime = Date.now() - mapQueryStartTime;
 
-      logger.info('景点搜索完成', {
+      logger.info('[地图查询] 完成', {
+        sessionId: this.sessionId,
         count: locations?.length || 0,
         timeMs: mapQueryTime,
+      });
+
+      logger.info('[地图查询] ✅ 高德 API 返回的完整结果', {
+        fullLocations: locations,
+        locationCount: locations?.length || 0,
       });
 
       // 处理无结果情况
@@ -420,6 +492,12 @@ export class DialogueManager {
       const llmParseStartTime = Date.now();
 
       const locationsJson = JSON.stringify(locations.slice(0, 10), null, 2);
+      
+      logger.debug('[LLM 解析] 开始解析推荐结果', {
+        sessionId: this.sessionId,
+        locationCount: locations.length,
+      });
+
       let parsedRecommendations: {
         locations: Array<{
           name: string;
@@ -430,11 +508,26 @@ export class DialogueManager {
         explanation: string;
       };
 
+      let llmParseTime = 0;
       try {
         parsedRecommendations = await llmEngine.parseRecommendations(locationsJson);
+        llmParseTime = Date.now() - llmParseStartTime;
+        logger.info('[LLM 解析] 成功', {
+          sessionId: this.sessionId,
+          parsedCount: parsedRecommendations.locations.length,
+          timeMs: llmParseTime,
+        });
+
+        logger.info('[LLM 解析] ✅ 完整解析结果', {
+          fullParsedRecommendations: parsedRecommendations,
+          locationCount: parsedRecommendations.locations.length,
+        });
       } catch (error) {
-        logger.warn('LLM 推荐解析失败，使用默认解析策略', {
-          error: error instanceof Error ? error.message : '未知错误',
+        llmParseTime = Date.now() - llmParseStartTime;
+        logger.warn('[LLM 解析] 失败，使用默认策略', {
+          sessionId: this.sessionId,
+          timeMs: llmParseTime,
+          error: error instanceof Error ? error.message : String(error),
         });
 
         // 降级方案：使用默认推荐理由
@@ -450,13 +543,6 @@ export class DialogueManager {
           explanation: `根据你在${preferences.location}的位置和偏好，为你推荐以下${preferences.parkType === 'hiking' ? '爬山' : '公园'}景点`,
         };
       }
-
-      const llmParseTime = Date.now() - llmParseStartTime;
-
-      logger.debug('推荐已解析', {
-        parsedCount: parsedRecommendations.locations.length,
-        timeMs: llmParseTime,
-      });
 
       // 7️⃣ 格式化为最终推荐格式
       const formattingStartTime = Date.now();
@@ -474,6 +560,21 @@ export class DialogueManager {
       logger.info('推荐流程完成 (性能优化版)', {
         recommendationCount: recommendations.length,
       });
+
+      logger.info('═══════════════════════════════════════════════════════', {});
+      logger.info('✅ 完整推荐流程成功 - 最终结果', {
+        recommendations: recommendations,
+        recommendationCount: recommendations.length,
+        performanceMetrics: {
+          totalTime: Date.now() - overallStartTime,
+          llmCheckTime: llmCheckTime,
+          paramOptimizationTime: paramOptimizationTime,
+          llmParseTime: llmParseTime,
+          mapQueryTime: mapQueryTime,
+          formattingTime: formattingTime,
+        },
+      });
+      logger.info('═══════════════════════════════════════════════════════', {});
 
       // 9️⃣ 缓存结果
       await this.cacheRecommendations(cacheKey, recommendations);
@@ -511,13 +612,25 @@ export class DialogueManager {
       this.metricsCollector.recordRequest(totalTime, false);
 
       logger.error('获取推荐失败', {
+        sessionId: this.sessionId,
         error: error instanceof Error ? error.message : '未知错误',
         timeMs: totalTime,
+        phase: this.state.phase,
+        userPref: this.state.userPreference,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+
+      logger.info('触发降级方案 #1: 高德搜索结果', {
+        sessionId: this.sessionId,
       });
 
       // 🔄 最后的降级处理：尝试从主要源获取数据
       try {
         const locationService = getLocationService();
+        
+        logger.debug('[降级 #1] 调用高德 API', {
+          sessionId: this.sessionId,
+        });
         
         // 即使 LLM 失败，也尝试从高德获取数据
         const fallback = await locationService.searchRecommendedLocations(
@@ -525,7 +638,8 @@ export class DialogueManager {
         );
         
         if (fallback && fallback.length > 0) {
-          logger.info('使用高德搜索结果作为最终降级方案', {
+          logger.info('[降级 #1] 成功获取数据', {
+            sessionId: this.sessionId,
             count: fallback.length,
           });
           
@@ -555,10 +669,15 @@ export class DialogueManager {
           };
         }
       } catch (finalFallbackError) {
-        logger.error('最终降级处理失败', {
+        logger.error('[降级 #1] 失败', {
+          sessionId: this.sessionId,
           error: finalFallbackError instanceof Error ? finalFallbackError.message : '未知错误',
         });
       }
+
+      logger.info('触发降级方案 #2: 模拟推荐数据', {
+        sessionId: this.sessionId,
+      });
 
       // 如果所有都失败了，至少返回模拟数据
       try {
@@ -570,6 +689,11 @@ export class DialogueManager {
             relevanceScore: 0.7,
           })),
           explanation: '系统已为你推荐热门景点',
+        });
+        
+        logger.info('[降级 #2] 使用模拟数据成功', {
+          sessionId: this.sessionId,
+          count: formatted.length,
         });
         
         this.state.phase = DialoguePhase.RECOMMENDING;
@@ -584,7 +708,8 @@ export class DialogueManager {
           },
         };
       } catch (mockError) {
-        logger.error('模拟数据生成失败', {
+        logger.error('[降级 #2] 失败', {
+          sessionId: this.sessionId,
           error: mockError instanceof Error ? mockError.message : '未知错误',
         });
       }

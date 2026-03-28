@@ -106,7 +106,7 @@ export class RecommendationFlowE2ETest {
 
       this.dialogueManager = new DialogueManager({
         maxTurns: 10,
-        timeout: 30000,
+        timeout: 300000, // 5 分钟，充分的 LLM 处理时间
         logHistory: true,
       });
 

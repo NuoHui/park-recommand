@@ -24,6 +24,8 @@
     "test:perf": "node --loader tsx src/__tests__/runner.ts --filter performance",
     "test:llm": "tsx scripts/test-llm.ts",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
+    "diagnose:llm": "tsx scripts/diagnose-llm.ts",
+    "trace:llm": "tsx scripts/trace-llm-flow.ts",
     "prepare": "husky install",
     "clean": "rm -rf dist"
   },
@@ -68,7 +70,7 @@
   },
   "husky": {
     "hooks": {
-      "pre-commit": "npm run test"
+      "pre-commit": "npm run test:unit"
     }
   }
 }

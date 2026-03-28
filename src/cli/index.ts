@@ -42,11 +42,17 @@ export async function createCLIApp(): Promise<Command> {
     .description('显示详细帮助信息')
     .action(helpCommand);
 
-  // 默认命令（无参数时执行）
+  // 默认命令（无参数或只有 rec 时执行）
   program
-    .action(() => {
-      showWelcome();
-      program.outputHelp();
+    .action(async (cmd: any) => {
+      // 如果没有输入命令或命令是 rec，进入推荐流程
+      if (!cmd || typeof cmd === 'object') {
+        await recommendCommand({
+          type: 'both',
+          distance: '10',
+          interactive: true,
+        });
+      }
     });
 
   return program;

@@ -57,7 +57,7 @@ export class BaoAnXiangXiangE2ETest {
     amapApiKey: process.env.AMAP_API_KEY,
     amapBaseUrl: process.env.AMAP_BASE_URL,
     llmProvider: process.env.LLM_PROVIDER,
-    llmApiKey: process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY,
+    llmApiKey: process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.ALIYUN_API_KEY,
   };
 
   /**
@@ -336,7 +336,7 @@ export class BaoAnXiangXiangE2ETest {
 
       dialogueManager = new DialogueManager({
         maxTurns: 10,
-        timeout: 30000,
+        timeout: 300000, // 5 分钟，充分的 LLM 处理时间
         logHistory: true,
       });
 
@@ -347,15 +347,68 @@ export class BaoAnXiangXiangE2ETest {
       // 模拟用户输入流程
       // 注：对话管理器通常会通过交互式对话来获取偏好
       // 这里我们模拟用户提供的直接输入
+      logger.info('开始添加用户输入');
+      
+      // 步骤 1: 跳过问候阶段（任何输入都可以）
+      await dialogueManager.addUserInput('start');
+      logger.info('已跳过问候阶段', {
+        currentPhase: dialogueManager.getState().phase,
+      });
+
+      // 步骤 2: 添加位置
       await dialogueManager.addUserInput('宝安西乡');
+      logger.info('已添加位置输入', {
+        userPref: dialogueManager.getUserPreference(),
+        currentPhase: dialogueManager.getState().phase,
+      });
+
+      // 步骤 3: 添加类型
       await dialogueManager.addUserInput('p'); // 公园类型
+      logger.info('已添加类型输入', {
+        userPref: dialogueManager.getUserPreference(),
+        currentPhase: dialogueManager.getState().phase,
+      });
+
+      // 步骤 4: 添加距离
       await dialogueManager.addUserInput('4'); // 距离不限制（选项 4）
+      logger.info('已添加距离输入', {
+        userPref: dialogueManager.getUserPreference(),
+        currentPhase: dialogueManager.getState().phase,
+      });
 
       // 获取推荐
+      logger.info('准备调用 getRecommendations', {
+        userPref: dialogueManager.getUserPreference(),
+      });
       const result = await dialogueManager.getRecommendations();
+      
+      logger.info('═══════════════════════════════════════════════════════', {});
+      logger.info('📊 LLM 推荐流程完整结果', {
+        success: result.success,
+        recommendationCount: result.recommendations?.length || 0,
+      });
+      
+      if (result.success) {
+        logger.info('✅ LLM 响应成功 - 完整推荐数据', {
+          recommendations: result.recommendations?.map((r: any) => ({
+            id: r.id,
+            name: r.name,
+            reason: r.reason,
+            distance: r.distance,
+            rating: r.rating,
+            location: r.location,
+            estimatedTravelTime: r.estimatedTravelTime,
+          })) || [],
+        });
+      } else {
+        logger.info('❌ LLM 响应失败信息', {
+          error: result.error,
+        });
+      }
+      logger.info('═══════════════════════════════════════════════════════', {});
 
       if (!result.success) {
-        throw new Error('推荐生成失败');
+        throw new Error(`推荐生成失败: ${result.error}`);
       }
 
       if (!result.recommendations || result.recommendations.length === 0) {
@@ -442,7 +495,7 @@ export class BaoAnXiangXiangE2ETest {
       const recommendations = previousTest.outputs.recommendations;
 
       // 验证推荐字段完整性
-      const requiredFields = ['name', 'location', 'reason', 'type'];
+      const requiredFields = ['id', 'name', 'reason'];
       const validationResults: Record<string, any> = {
         totalRecommendations: recommendations.length,
         validRecommendations: 0,

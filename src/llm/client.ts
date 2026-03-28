@@ -57,20 +57,67 @@ export class LLMClient implements ILLMClient {
    */
   async call(messages: LLMMessage[], config?: Partial<LLMConfig>): Promise<LLMResponse> {
     const mergedConfig = { ...this.config, ...(config || {}) };
+    const callStartTime = Date.now();
+
+    logger.debug('[LLM 调用] 开始发起请求', {
+      provider: mergedConfig.provider,
+      model: mergedConfig.model,
+      messageCount: messages.length,
+      baseUrl: mergedConfig.baseUrl,
+    });
+
+    logger.debug('[LLM 调用] 完整请求消息', {
+      messages: messages.map((m, i) => ({
+        index: i,
+        role: m.role,
+        contentLength: m.content?.length || 0,
+        contentPreview: m.content?.substring(0, 100),
+      })),
+    });
 
     try {
+      let result: LLMResponse;
+      
       if (mergedConfig.provider === 'openai' || mergedConfig.provider === 'aliyun') {
-        return await this.callOpenAI(messages, mergedConfig);
+        logger.debug('[LLM 调用] 使用 OpenAI 客户端', {
+          provider: mergedConfig.provider,
+          model: mergedConfig.model,
+        });
+        result = await this.callOpenAI(messages, mergedConfig);
       } else if (mergedConfig.provider === 'anthropic') {
-        return await this.callAnthropic(messages, mergedConfig);
+        logger.debug('[LLM 调用] 使用 Anthropic 客户端', {
+          model: mergedConfig.model,
+        });
+        result = await this.callAnthropic(messages, mergedConfig);
       } else {
         throw new Error(`Unsupported LLM provider: ${mergedConfig.provider}`);
       }
-    } catch (error) {
-      logger.error('LLM 调用失败', {
+
+      const callDuration = Date.now() - callStartTime;
+      logger.info('[LLM 调用] 响应成功', {
         provider: mergedConfig.provider,
         model: mergedConfig.model,
+        durationMs: callDuration,
+        contentLength: result.content?.length || 0,
+        tokenUsage: result.usage,
+        finishReason: result.finishReason,
+      });
+
+      logger.info('[LLM 调用] ✅ 完整响应内容', {
+        fullContent: result.content,
+        contentLength: result.content?.length || 0,
+      });
+
+      return result;
+    } catch (error) {
+      const callDuration = Date.now() - callStartTime;
+      logger.error('[LLM 调用] 请求失败', {
+        provider: mergedConfig.provider,
+        model: mergedConfig.model,
+        durationMs: callDuration,
         error: error instanceof Error ? error.message : String(error),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        stack: error instanceof Error ? error.stack : undefined,
       });
       throw error;
     }
@@ -84,36 +131,80 @@ export class LLMClient implements ILLMClient {
       throw new Error('OpenAI client not initialized');
     }
 
-    const response = await this.openaiClient.chat.completions.create({
+    logger.debug('[OpenAI] 准备发送请求', {
       model: config.model,
-      messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
       temperature: config.temperature ?? 0.7,
-      max_tokens: config.maxTokens ?? 2000,
-      top_p: config.topP ?? 1.0,
-      frequency_penalty: config.frequencyPenalty ?? 0,
-      presence_penalty: config.presencePenalty ?? 0,
+      maxTokens: config.maxTokens ?? 2000,
+      timeout: config.timeout || 60000,
     });
 
-    const content = response.choices[0]?.message?.content || '';
-    const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    try {
+      const requestStartTime = Date.now();
+      
+      logger.debug('[OpenAI] 发送请求到 API', {
+        model: config.model,
+        messageCount: messages.length,
+        timestamp: new Date().toISOString(),
+      });
 
-    logger.debug('OpenAI 响应', {
-      id: response.id,
-      model: response.model,
-      usage: usage,
-    });
+      const response = await this.openaiClient.chat.completions.create({
+        model: config.model,
+        messages: messages as OpenAI.Chat.ChatCompletionMessageParam[],
+        temperature: config.temperature ?? 0.7,
+        max_tokens: config.maxTokens ?? 2000,
+        top_p: config.topP ?? 1.0,
+        frequency_penalty: config.frequencyPenalty ?? 0,
+        presence_penalty: config.presencePenalty ?? 0,
+      });
 
-    return {
-      id: response.id,
-      content,
-      model: response.model,
-      usage: {
+      const requestDuration = Date.now() - requestStartTime;
+
+      logger.debug('[OpenAI] 收到 API 响应', {
+        requestDurationMs: requestDuration,
+        responseId: response.id,
+        model: response.model,
+        choicesCount: response.choices.length,
+        finishReason: response.choices[0]?.finish_reason,
+      });
+
+      const content = response.choices[0]?.message?.content || '';
+      const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+
+      logger.debug('[OpenAI] 响应内容分析', {
+        id: response.id,
+        model: response.model,
+        contentLength: content.length,
+        usage: usage,
         promptTokens: usage.prompt_tokens,
         completionTokens: usage.completion_tokens,
         totalTokens: usage.total_tokens,
-      },
-      finishReason: response.choices[0]?.finish_reason || 'stop',
-    };
+      });
+
+      logger.debug('[OpenAI] 响应内容预览', {
+        contentPreview: content.substring(0, 300),
+      });
+
+      return {
+        id: response.id,
+        content,
+        model: response.model,
+        usage: {
+          promptTokens: usage.prompt_tokens,
+          completionTokens: usage.completion_tokens,
+          totalTokens: usage.total_tokens,
+        },
+        finishReason: response.choices[0]?.finish_reason || 'stop',
+      };
+    } catch (error) {
+      logger.error('[OpenAI] API 请求异常', {
+        error: error instanceof Error ? error.message : String(error),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        errorCode: (error as any)?.code,
+        errorStatus: (error as any)?.status,
+        stack: error instanceof Error ? error.stack?.substring(0, 500) : undefined,
+      });
+      throw error;
+    }
   }
 
   /**

@@ -236,6 +236,9 @@ export async function testAmapAPI() {
         }
 
         const regeocode = response.regeocode;
+        if (!regeocode) {
+          throw new Error('反向地址编码返回数据为空');
+        }
         logger.info('✅ 测试 5 通过：反向地址编码成功', {
           formatted_address: regeocode.formatted_address,
           addressComponent: regeocode.addressComponent?.city,
@@ -449,9 +452,9 @@ export async function testAmapAPI() {
   const results = await Promise.all(tests);
 
   // 统计结果
-  const passed = results.filter(r => r.passed && !r.skipped).length;
+  const passed = results.filter(r => r.passed && !('skipped' in r && r.skipped)).length;
   const failed = results.filter(r => !r.passed).length;
-  const skipped = results.filter(r => r.skipped).length;
+  const skipped = results.filter(r => 'skipped' in r && r.skipped).length;
   const total = results.length;
 
   logger.info('', {});
@@ -460,8 +463,9 @@ export async function testAmapAPI() {
   logger.info('╚════════════════════════════════════════════════════════════╝', {});
 
   results.forEach(result => {
-    if (result.skipped) {
-      logger.info(`⏭️  ${result.name} - 已跳过 (${result.reason})`);
+    if ('skipped' in result && result.skipped) {
+      const reason = 'reason' in result ? result.reason : 'unknown';
+      logger.info(`⏭️  ${result.name} - 已跳过 (${reason})`);
     } else if (result.passed) {
       logger.info(`✅ ${result.name}`);
     } else {

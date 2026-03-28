@@ -38,7 +38,7 @@ class LLMService {
 
     try {
       // 检查是否使用 Mock 模式
-      this.useMock = process.env.USE_MOCK_LLM === 'true' || env.useMockLLM;
+      this.useMock = process.env.USE_MOCK_LLM === 'true' || (env.useMockLLM ?? false);
 
       if (this.useMock) {
         logger.info('使用 Mock LLM 模式（测试/开发环境）');

@@ -46,11 +46,37 @@ export class LLMEngine implements ILLMEngine {
       // 构建对话消息
       const messages = this.buildMessages(request);
 
+      logger.debug('[LLM 引擎] 处理对话请求', {
+        sessionId: request.sessionId,
+        phase: request.currentPhase,
+        userInput: request.userInput?.substring(0, 100),
+        messageCount: messages.length,
+      });
+
+      logger.debug('[LLM 引擎] 调用 LLM 客户端', {
+        sessionId: request.sessionId,
+        phase: request.currentPhase,
+      });
+
       // 调用 LLM
       const llmResponse = await this.client.call(messages);
 
+      logger.debug('[LLM 引擎] LLM 响应收到', {
+        sessionId: request.sessionId,
+        phase: request.currentPhase,
+        contentLength: llmResponse.content?.length || 0,
+        tokensUsed: llmResponse.usage?.totalTokens,
+      });
+
       // 解析 LLM 响应
       const parsed = this.parseDialogueResponse(llmResponse.content, request.currentPhase);
+
+      logger.debug('[LLM 引擎] 响应解析完成', {
+        sessionId: request.sessionId,
+        phase: request.currentPhase,
+        parsedMessage: parsed.message?.substring(0, 100),
+        nextPhase: parsed.nextPhase,
+      });
 
       // 记录对话历史
       this.addToConversationHistory(request.sessionId, messages);
@@ -75,9 +101,12 @@ export class LLMEngine implements ILLMEngine {
         recommendations: parsed.recommendations,
       };
     } catch (error) {
-      logger.error('对话处理失败', {
+      logger.error('[LLM 引擎] 对话处理失败', {
         sessionId: request.sessionId,
+        phase: request.currentPhase,
         error: error instanceof Error ? error.message : String(error),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        stack: error instanceof Error ? error.stack?.substring(0, 500) : undefined,
       });
 
       return {
@@ -186,26 +215,24 @@ export class LLMEngine implements ILLMEngine {
    * 根据用户偏好生成搜索参数
    */
   async generateSearchParams(preferences: UserPreference): Promise<RecommendationDecision> {
-    const prompt = `
-基于以下用户偏好，生成最优的搜索参数：
+    logger.debug('[参数生成] 开始生成搜索参数', {
+      location: preferences.location,
+      parkType: preferences.parkType,
+      maxDistance: preferences.maxDistance,
+    });
 
+    // 调用 LLM 生成搜索参数
+    const prompt = `快速生成搜索参数（仅输出 JSON）：
 ${formatPreferenceSummary(preferences)}
 
-请输出 JSON 格式，包含：
-{
-  "location": "搜索区域（如'南山区'）",
-  "parkType": "公园类型: park|hiking|both",
-  "maxDistance": 搜索半径（公里），
-  "minDifficulty": "最低难度（如果适用）",
-  "maxDifficulty": "最高难度（如果适用）",
-  "keywords": ["搜索关键词"],
-  "reasoning": "为什么这样搜索的理由",
-  "confidence": 0.95
-}
-
-只输出 JSON，不要其他文本。`;
+输出格式：{"location":"搜索区域","parkType":"park|hiking|both","maxDistance":搜索半径,"keywords":["关键词"],"confidence":0.9}`;
 
     try {
+      const startTime = Date.now();
+      logger.debug('[参数生成] 发送 LLM 请求', {
+        promptLength: prompt.length,
+      });
+
       const response = await this.client.call([
         {
           role: 'system',
@@ -217,7 +244,26 @@ ${formatPreferenceSummary(preferences)}
         },
       ]);
 
+      const duration = Date.now() - startTime;
+      logger.debug('[参数生成] LLM 响应收到', {
+        durationMs: duration,
+        contentLength: response.content?.length || 0,
+        contentPreview: response.content?.substring(0, 100),
+      });
+
+      logger.info('[参数生成] ✅ LLM 返回的完整响应', {
+        fullResponse: response.content,
+      });
+
       const parsed = JSON.parse(response.content);
+
+      logger.info('[参数生成] 参数生成完成', {
+        durationMs: duration,
+        location: parsed.location,
+        parkType: parsed.parkType,
+        maxDistance: parsed.maxDistance,
+        parsedData: parsed,
+      });
 
       return {
         shouldRecommend: true,
@@ -258,29 +304,52 @@ ${formatPreferenceSummary(preferences)}
 
   /**
    * 解析 LLM 的推荐响应
+   * 优化：直接解析 JSON 而无需额外的 LLM 调用
    */
   async parseRecommendations(response: string): Promise<ParsedRecommendation> {
-    const prompt = `
-解析以下推荐文本，提取景点信息：
-
-${response}
-
-请输出 JSON 格式，包含：
-{
-  "locations": [
-    {
-      "name": "景点名称",
-      "reason": "推荐理由",
-      "relevanceScore": 0.95,
-      "estimatedTravelTime": 15
-    }
-  ],
-  "explanation": "整体推荐说明"
-}
-
-只输出 JSON，不要其他文本。`;
+    logger.debug('[推荐解析] 开始解析推荐响应', {
+      responseLength: response?.length || 0,
+      responsePreview: response?.substring(0, 100),
+    });
 
     try {
+      // 首先尝试直接解析为 JSON
+      logger.debug('[推荐解析] 尝试直接解析 JSON');
+      const parsed = JSON.parse(response);
+      
+      if (parsed.locations && Array.isArray(parsed.locations)) {
+        logger.info('[推荐解析] ✅ 直接解析成功', {
+          locationCount: parsed.locations.length,
+          fullResponse: parsed,
+        });
+
+        return {
+          locations: parsed.locations.map((loc: any) => ({
+            name: loc.name || loc.title || '',
+            reason: loc.reason || loc.description || '',
+            relevanceScore: loc.relevanceScore ?? loc.score ?? 0.8,
+            estimatedTravelTime: loc.estimatedTravelTime,
+          })),
+          explanation: parsed.explanation || '根据你的偏好为你推荐以下景点',
+        };
+      }
+    } catch (parseError) {
+      // 如果直接解析失败，再试试用 LLM
+      logger.debug('[推荐解析] 直接解析失败，尝试使用 LLM', {
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+      });
+    }
+
+    // 只有在需要时才调用 LLM
+    const prompt = `快速解析推荐（仅输出 JSON）：
+${response}
+
+输出：{"locations":[{"name":"景点名","reason":"理由","relevanceScore":0.9}],"explanation":"说明"}`;
+
+    try {
+      const startTime = Date.now();
+      logger.debug('[推荐解析] 发送 LLM 请求');
+
       const llmResponse = await this.client.call([
         {
           role: 'system',
@@ -292,15 +361,33 @@ ${response}
         },
       ]);
 
+      const duration = Date.now() - startTime;
+      logger.debug('[推荐解析] LLM 响应收到', {
+        durationMs: duration,
+        contentLength: llmResponse.content?.length || 0,
+      });
+
+      logger.info('[推荐解析] ✅ LLM 返回的完整响应', {
+        fullResponse: llmResponse.content,
+      });
+
       const parsed = JSON.parse(llmResponse.content);
+
+      logger.info('[推荐解析] 完成', {
+        durationMs: duration,
+        locationCount: parsed.locations?.length || 0,
+        parsedData: parsed,
+      });
 
       return {
         locations: parsed.locations || [],
         explanation: parsed.explanation || '',
       };
     } catch (error) {
-      logger.warn('推荐解析失败', {
+      logger.error('[推荐解析] LLM 解析失败', {
         error: error instanceof Error ? error.message : String(error),
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+        stack: error instanceof Error ? error.stack?.substring(0, 500) : undefined,
       });
 
       return {
