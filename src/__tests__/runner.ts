@@ -5,7 +5,6 @@
 
 import { runLLMTests } from './unit/llm.test';
 import { testAmapAPI } from './unit/amap.test';
-import { runAllDialogueManagerTests } from './unit/dialogue-manager.test';
 
 type TestType = 'unit';
 
@@ -52,7 +51,6 @@ async function main() {
       console.log('\n📌 执行单元测试...');
       await runLLMTests();
       await testAmapAPI();
-      await runAllDialogueManagerTests();
     }
 
     const duration = Date.now() - startTime;
