@@ -66,19 +66,29 @@ function transformFile(filePath) {
     }
   }
   
-  // 然后处理所有相对导入，添加 .js 扩展名（如果没有）
-  const relativeImportRegex = /(['"])(\.\.?\/[^'"]+)(['"])/g;
-  if (relativeImportRegex.test(content)) {
-    content = content.replace(relativeImportRegex, (match, quote1, importPath, quote2) => {
-      // 如果不以 .js 结尾，添加 .js
-      if (!importPath.endsWith('.js')) {
-        return `${quote1}${importPath}.js${quote2}`;
-      }
+  // 然后处理所有导入语句中的相对路径，添加 .js 扩展名（如果没有）
+  // 只匹配 from '...' 或 import '...' 模式，不匹配其他字符串
+  const importStatementRegex = /(from|import)\s+(['"])([^'"]+)\2/g;
+  content = content.replace(importStatementRegex, (match, keyword, quote, importPath) => {
+    // 排除第三方包（不以 . 或 / 开头，如 'commander', 'dotenv' 等）
+    if (!importPath.startsWith('.') && !importPath.startsWith('/')) {
       return match;
-    });
+    }
     
-    modified = true;
-  }
+    // 排除非 JS 文件：检查最后一个 / 之后是否有文件扩展名（且不是 .js）
+    const lastSlashIndex = importPath.lastIndexOf('/');
+    const filename = lastSlashIndex === -1 ? importPath : importPath.substring(lastSlashIndex + 1);
+    if (filename.includes('.') && !filename.endsWith('.js')) {
+      return match;
+    }
+    
+    // 如果不以 .js 结尾，添加 .js
+    if (!importPath.endsWith('.js')) {
+      modified = true;
+      return `${keyword} ${quote}${importPath}.js${quote}`;
+    }
+    return match;
+  });
 
   if (modified) {
     fs.writeFileSync(filePath, content, 'utf8');
