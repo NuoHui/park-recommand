@@ -21,6 +21,7 @@
     "test:unit": "node --loader tsx src/__tests__/runner.ts --filter unit",
     "test:llm": "tsx scripts/test-llm.ts",
     "test:amap": "tsx src/__tests__/unit/amap.test.ts",
+    "test:dm": "tsx src/__tests__/unit/dialogue-manager.test.ts",
     "diagnose:llm": "tsx scripts/diagnose-llm.ts",
     "trace:llm": "tsx scripts/trace-llm-flow.ts",
     "prepare": "husky install",

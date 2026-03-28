@@ -23,6 +23,7 @@ export class RequestQueue {
   private running: Set<string> = new Set();
   private deduplicationMap: Map<string, string> = new Map();
   private eventListeners: QueueEventListener[] = [];
+  private completedRequests: Map<string, QueuedRequest> = new Map(); // 存储已完成/失败的请求
 
   private readonly maxConcurrency: number;
   private readonly defaultTimeout: number;
@@ -223,6 +224,9 @@ export class RequestQueue {
     } finally {
       // 从运行集合中移除
       this.running.delete(request.id);
+
+      // 保存已完成的请求到 Map（供后续查询）
+      this.completedRequests.set(request.id, request);
 
       // 继续处理下一个请求
       this.process();

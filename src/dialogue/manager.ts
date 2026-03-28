@@ -27,12 +27,13 @@ export class DialogueManager {
   private requestQueue: RequestQueue;
   private cacheWarmer: CacheWarmer;
   private metricsCollector: MetricsCollector;
+  private recommendationCache: Map<string, { data: any; timestamp: number }> = new Map();
 
   constructor(config: DialogueManagerConfig = {}, sessionManager?: SessionManager) {
     this.sessionId = uuidv4();
     this.config = {
       maxTurns: config.maxTurns || 10,
-      timeout: config.timeout || 300000, // 5 分钟，充分的 LLM 处理时间
+      timeout: config.timeout || 600000, // 10 分钟，充分的 LLM 处理时间
       logHistory: config.logHistory !== false,
     };
 
@@ -173,7 +174,7 @@ export class DialogueManager {
    * 处理位置输入
    */
   private async handleLocationInput(location: string): Promise<void> {
-    this.state.userPreference.location = location;
+    this.state.userPreference.location = location.trim();
     this.state.phase = DialoguePhase.COLLECTING_TYPE;
 
     this.addMessage({
@@ -196,7 +197,7 @@ export class DialogueManager {
       both: 'both',
     };
 
-    const selectedType = typeMap[choice.toLowerCase()];
+    const selectedType = typeMap[choice.toLowerCase().trim()];
     if (!selectedType) {
       this.addMessage({
         role: 'assistant',
@@ -682,6 +683,15 @@ export class DialogueManager {
       // 如果所有都失败了，至少返回模拟数据
       try {
         const mock = this.generateMockRecommendations();
+        
+        if (!mock || mock.length === 0) {
+          logger.error('[降级 #2] 模拟数据生成失败或为空');
+          return {
+            success: false,
+            error: '无法生成推荐数据',
+          };
+        }
+        
         const formatted = await this.formatRecommendations(mock, {
           locations: mock.map(m => ({
             name: m.name,
@@ -745,17 +755,34 @@ export class DialogueManager {
       rating?: number;
     }>
   > {
+    // ✅ 验证输入数据
+    if (!Array.isArray(locations) || locations.length === 0) {
+      logger.warn('无有效的地点数据');
+      return [];
+    }
+
     // 创建查找表，快速匹配推荐理由
     const reasonMap = new Map<string, string>();
     const scoreMap = new Map<string, number>();
 
     parsedData.locations.forEach(item => {
-      reasonMap.set(item.name.toLowerCase(), item.reason);
-      scoreMap.set(item.name.toLowerCase(), item.relevanceScore);
+      if (item.name && item.reason) {
+        reasonMap.set(item.name.toLowerCase(), item.reason);
+        scoreMap.set(item.name.toLowerCase(), item.relevanceScore);
+      }
+    });
+
+    // ✅ 过滤无效的位置对象
+    const validLocations = locations.filter(loc => {
+      if (!loc.name || typeof loc.name !== 'string') {
+        logger.debug('跳过无效位置', { loc });
+        return false;
+      }
+      return true;
     });
 
     // 按相关性排序
-    const sorted = locations
+    const sorted = validLocations
       .map(loc => ({
         ...loc,
         relevanceScore: scoreMap.get(loc.name.toLowerCase()) || 0.5,
@@ -1005,9 +1032,14 @@ export class DialogueManager {
     }>
   ): Promise<void> {
     try {
-      // TODO: 连接到实际的缓存系统 (Redis, LRU, 等)
-      // 当前使用内存缓存占位符
-      logger.debug('推荐已缓存', { cacheKey });
+      this.recommendationCache.set(cacheKey, {
+        data: recommendations,
+        timestamp: Date.now(),
+      });
+      logger.debug('推荐已缓存', { 
+        cacheKey,
+        count: recommendations.length,
+      });
     } catch (error) {
       logger.warn('缓存保存失败', {
         error: error instanceof Error ? error.message : '未知错误',
