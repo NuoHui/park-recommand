@@ -3,6 +3,7 @@ import { CacheEntry } from '@/types/common';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
+import { Deduplicator } from './deduplicator';
 import { ExpirationManager, DEFAULT_CACHE_POLICIES } from './expiration';
 import { CacheCategory, CacheStats, CacheStatsResult, CleanupResult } from './types';
 import { Location, Recommendation } from '@/types/common';
@@ -206,16 +207,20 @@ export class CacheManager {
   }
 
   /**
-   * 批量设置缓存
+   * 批量设置缓存（带去重）
    */
   async setLocations(
     locations: Location[],
     keyPrefix: string = 'locations'
   ): Promise<void> {
+    // 去重
+    const deduped = Deduplicator.deduplicateLocations(locations);
+    const merged = Deduplicator.mergeLocations(deduped);
+
     const key = `${keyPrefix}:${Date.now()}`;
     await this.set(
       key,
-      locations,
+      merged,
       DEFAULT_CACHE_POLICIES[CacheCategory.LOCATION],
       CacheCategory.LOCATION
     );
@@ -237,20 +242,21 @@ export class CacheManager {
       }
     }
 
-    return locations;
+    return Deduplicator.deduplicateLocations(locations);
   }
 
   /**
-   * 缓存推荐结果
+   * 缓存推荐结果（带去重）
    */
   async setRecommendations(
     recommendations: Recommendation[],
     keyPrefix: string = 'recommendations'
   ): Promise<void> {
+    const deduped = Deduplicator.deduplicateRecommendations(recommendations);
     const key = `${keyPrefix}:${Date.now()}`;
     await this.set(
       key,
-      recommendations,
+      deduped,
       DEFAULT_CACHE_POLICIES[CacheCategory.RECOMMENDATION],
       CacheCategory.RECOMMENDATION
     );
