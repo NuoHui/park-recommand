@@ -275,6 +275,7 @@ async function processRecommendations(
 
     // 取前 10 个 POI
     const topPois = pois.slice(0, 10);
+    const MAX_RECOMMENDATIONS = 5;
 
     // 构建详细的 POI 信息（包含商圈）
     const poiDetails = topPois
@@ -304,7 +305,7 @@ ${idx + 1}. ${poi.name}
 3. 根据实际数据（评分、评价数、营业时间等）生成具体建议
 4. 考虑用户可能的使用场景，提供实用建议
 
-请返回 JSON 数组格式，包含 3-5 个最佳推荐。每个推荐应包含完整的信息：
+请返回 JSON 数组格式，包含最多 ${MAX_RECOMMENDATIONS} 个最优推荐。每个推荐应包含完整的信息：
 [
   {
     "name": "地点名称",
@@ -319,6 +320,7 @@ ${idx + 1}. ${poi.name}
 ]
 
 重要提示：
+- 只返回最推荐的 Top ${MAX_RECOMMENDATIONS} 个地点
 - reason 字段应该结合用户需求和地点的实际数据来生成
 - 优先推荐评分高（4.0+）、评价多（100+）的地点
 - 确保返回的是有效的 JSON 数组
@@ -360,8 +362,11 @@ ${poiDetails}
 
     const recommendations = JSON.parse(jsonMatch[0]);
 
+    // 限制为最多 TOP_RECOMMENDATIONS 个推荐
+    const topRecommendations = recommendations.slice(0, MAX_RECOMMENDATIONS);
+
     // 补充 ID、地址和其他信息（包含商圈）
-    return recommendations.map((rec: any, idx: number) => ({
+    return topRecommendations.map((rec: any, idx: number) => ({
       id: topPois[idx]?.id || `poi_${idx}`,
       name: rec.name,
       reason: rec.reason,
