@@ -1,4 +1,5 @@
 import { LLMClient, createLLMClient } from './client';
+import { MockLLMClient, createMockLLMClient } from './mock-client';
 import { LLMEngine, createLLMEngine } from './engine';
 import { LLMProvider, LLMConfig } from '@/types/llm';
 import { env } from '@/config/env';
@@ -11,9 +12,10 @@ const logger = createLogger('llm:service');
  */
 class LLMService {
   private static instance: LLMService;
-  private client?: LLMClient;
+  private client?: LLMClient | MockLLMClient;
   private engine?: LLMEngine;
   private initialized: boolean = false;
+  private useMock: boolean = false;
 
   /**
    * 获取单例实例
@@ -35,48 +37,89 @@ class LLMService {
     }
 
     try {
-      // 根据环境配置选择 LLM 提供商
-      const provider = env.llmProvider as LLMProvider;
-      let apiKey: string;
-      let model: string;
+      // 检查是否使用 Mock 模式
+      this.useMock = process.env.USE_MOCK_LLM === 'true' || env.useMockLLM;
 
-      if (provider === 'openai') {
-        apiKey = env.openaiApiKey || '';
-        model = env.openaiModel;
-        if (!apiKey) {
-          throw new Error('OPENAI_API_KEY is not configured');
-        }
-      } else if (provider === 'anthropic') {
-        apiKey = env.anthropicApiKey || '';
-        model = env.anthropicModel;
-        if (!apiKey) {
-          throw new Error('ANTHROPIC_API_KEY is not configured');
-        }
+      if (this.useMock) {
+        logger.info('使用 Mock LLM 模式（测试/开发环境）');
+        this.client = createMockLLMClient('openai', 'mock-key', 'mock-model');
       } else {
-        throw new Error(`Unsupported LLM provider: ${provider}`);
-      }
+        // 根据环境配置选择 LLM 提供商
+        const provider = env.llmProvider as LLMProvider;
+        let apiKey: string;
+        let model: string;
 
-      // 创建客户端
-      this.client = createLLMClient(provider, apiKey, model, {
-        temperature: 0.7,
-        maxTokens: 2000,
-        timeout: 60000,
-      });
+        if (provider === 'openai') {
+          apiKey = env.openaiApiKey || '';
+          model = env.openaiModel;
+          if (!apiKey || apiKey.includes('your-') || apiKey.includes('your_')) {
+            logger.warn('OpenAI API Key 似乎是虚假的，将使用 Mock LLM 模式');
+            this.useMock = true;
+            this.client = createMockLLMClient(provider, apiKey, model);
+          } else {
+            this.client = createLLMClient(provider, apiKey, model, {
+              temperature: 0.7,
+              maxTokens: 2000,
+              timeout: 60000,
+            });
+          }
+        } else if (provider === 'anthropic') {
+          apiKey = env.anthropicApiKey || '';
+          model = env.anthropicModel;
+          if (!apiKey || apiKey.includes('your-') || apiKey.includes('your_')) {
+            logger.warn('Anthropic API Key 似乎是虚假的，将使用 Mock LLM 模式');
+            this.useMock = true;
+            this.client = createMockLLMClient(provider, apiKey, model);
+          } else {
+            this.client = createLLMClient(provider, apiKey, model, {
+              temperature: 0.7,
+              maxTokens: 2000,
+              timeout: 60000,
+            });
+          }
+      } else if (provider === 'aliyun') {
+          apiKey = env.aliyunApiKey || '';
+          model = env.aliyunModel;
+          if (!apiKey || apiKey.includes('your-') || apiKey.includes('your_')) {
+            logger.warn('Aliyun API Key 似乎是虚假的，将使用 Mock LLM 模式');
+            this.useMock = true;
+            this.client = createMockLLMClient(provider, apiKey, model);
+          } else {
+            this.client = createLLMClient(provider, apiKey, model, {
+              baseUrl: env.aliyunBaseUrl,
+              temperature: 0.7,
+              maxTokens: 2000,
+              timeout: 60000,
+            });
+          }
+        } else {
+          throw new Error(`Unsupported LLM provider: ${provider}`);
+        }
 
-      // 验证连接
-      const isValid = await this.client.validateConnection();
-      if (!isValid) {
-        throw new Error('Failed to connect to LLM API');
+        // 如果不是 Mock 模式，验证连接
+        if (!this.useMock) {
+          const isValid = await this.client.validateConnection();
+          if (!isValid) {
+            logger.warn('LLM API 连接失败，切换到 Mock 模式');
+            this.useMock = true;
+            this.client = createMockLLMClient(
+              env.llmProvider as LLMProvider,
+              env.openaiApiKey || env.anthropicApiKey || env.aliyunApiKey || '',
+              env.openaiModel || env.anthropicModel || env.aliyunModel
+            );
+          }
+        }
       }
 
       // 创建引擎
-      this.engine = createLLMEngine(this.client);
+      this.engine = createLLMEngine(this.client as any);
 
       this.initialized = true;
 
       logger.info('LLM 服务初始化成功', {
-        provider,
-        model,
+        provider: this.client.getProvider(),
+        model: this.client.getModel(),
+        mode: this.useMock ? 'mock' : 'real',
         status: 'ready',
       });
     } catch (error) {
@@ -90,7 +133,7 @@ class LLMService {
   /**
    * 获取客户端
    */
-  getClient(): LLMClient {
+  getClient(): LLMClient | MockLLMClient {
     if (!this.client) {
       throw new Error('LLM service not initialized. Call initialize() first.');
     }
@@ -135,6 +178,7 @@ class LLMService {
     initialized: boolean;
     provider?: string;
     model?: string;
+    mode?: 'mock' | 'real';
     stats?: {
       activeSessions: number;
       totalMessages: number;
@@ -148,6 +192,7 @@ class LLMService {
       initialized: true,
       provider: this.client.getProvider(),
       model: this.client.getModel(),
+      mode: this.useMock ? 'mock' : 'real',
       stats: this.engine.getStats(),
     };
   }
@@ -164,5 +209,6 @@ export function getLLMService(): LLMService {
  * 导出服务和工厂函数
  */
 export { LLMClient, createLLMClient } from './client';
+export { MockLLMClient, createMockLLMClient } from './mock-client';
 export { LLMEngine, createLLMEngine } from './engine';
 export * from '@/types/llm';

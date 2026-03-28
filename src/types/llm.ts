@@ -4,7 +4,7 @@ import { DifficultyLevel, ParkType } from '@/config/constants';
 /**
  * LLM 提供商类型
  */
-export type LLMProvider = 'openai' | 'anthropic';
+export type LLMProvider = 'openai' | 'anthropic' | 'aliyun';
 
 /**
  * LLM 模型配置

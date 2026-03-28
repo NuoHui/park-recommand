@@ -72,6 +72,13 @@ async function verifyEnvironment(): Promise<boolean> {
     }
     info(`模型: ${env.anthropicModel}`);
     success('Anthropic API Key 已配置');
+  } else if (provider === 'aliyun') {
+    if (!env.aliyunApiKey) {
+      error('缺少 ALIYUN_API_KEY 配置');
+      return false;
+    }
+    info(`模型: ${env.aliyunModel}`);
+    success('Aliyun API Key 已配置');
   } else {
     error(`不支持的提供商: ${provider}`);
     return false;
@@ -87,16 +94,19 @@ async function testConnection(): Promise<boolean> {
   section('2️⃣  LLM 连接测试');
 
   try {
-    const provider = env.llmProvider as 'openai' | 'anthropic';
+    const provider = env.llmProvider as 'openai' | 'anthropic' | 'aliyun';
     let apiKey: string;
     let model: string;
 
     if (provider === 'openai') {
       apiKey = env.openaiApiKey || '';
       model = env.openaiModel;
-    } else {
+    } else if (provider === 'anthropic') {
       apiKey = env.anthropicApiKey || '';
       model = env.anthropicModel;
+    } else {
+      apiKey = env.aliyunApiKey || '';
+      model = env.aliyunModel;
     }
 
     info(`正在连接到 ${provider} (模型: ${model})...`);
@@ -124,16 +134,19 @@ async function testBasicCall(): Promise<boolean> {
   section('3️⃣  基础调用测试');
 
   try {
-    const provider = env.llmProvider as 'openai' | 'anthropic';
+    const provider = env.llmProvider as 'openai' | 'anthropic' | 'aliyun';
     let apiKey: string;
     let model: string;
 
     if (provider === 'openai') {
       apiKey = env.openaiApiKey || '';
       model = env.openaiModel;
-    } else {
+    } else if (provider === 'anthropic') {
       apiKey = env.anthropicApiKey || '';
       model = env.anthropicModel;
+    } else {
+      apiKey = env.aliyunApiKey || '';
+      model = env.aliyunModel;
     }
 
     info('正在调用 LLM 进行简单测试...');
@@ -171,16 +184,19 @@ async function testPreferenceExtraction(): Promise<boolean> {
   section('4️⃣  用户偏好提取测试');
 
   try {
-    const provider = env.llmProvider as 'openai' | 'anthropic';
+    const provider = env.llmProvider as 'openai' | 'anthropic' | 'aliyun';
     let apiKey: string;
     let model: string;
 
     if (provider === 'openai') {
       apiKey = env.openaiApiKey || '';
       model = env.openaiModel;
-    } else {
+    } else if (provider === 'anthropic') {
       apiKey = env.anthropicApiKey || '';
       model = env.anthropicModel;
+    } else {
+      apiKey = env.aliyunApiKey || '';
+      model = env.aliyunModel;
     }
 
     info('正在提取用户偏好信息...');
@@ -217,16 +233,19 @@ async function testRecommendationDecision(): Promise<boolean> {
   section('5️⃣  推荐决策生成测试');
 
   try {
-    const provider = env.llmProvider as 'openai' | 'anthropic';
+    const provider = env.llmProvider as 'openai' | 'anthropic' | 'aliyun';
     let apiKey: string;
     let model: string;
 
     if (provider === 'openai') {
       apiKey = env.openaiApiKey || '';
       model = env.openaiModel;
-    } else {
+    } else if (provider === 'anthropic') {
       apiKey = env.anthropicApiKey || '';
       model = env.anthropicModel;
+    } else {
+      apiKey = env.aliyunApiKey || '';
+      model = env.aliyunModel;
     }
 
     info('正在生成推荐决策...');
@@ -268,16 +287,19 @@ async function testRecommendationParsing(): Promise<boolean> {
   section('6️⃣  推荐解析测试');
 
   try {
-    const provider = env.llmProvider as 'openai' | 'anthropic';
+    const provider = env.llmProvider as 'openai' | 'anthropic' | 'aliyun';
     let apiKey: string;
     let model: string;
 
     if (provider === 'openai') {
       apiKey = env.openaiApiKey || '';
       model = env.openaiModel;
-    } else {
+    } else if (provider === 'anthropic') {
       apiKey = env.anthropicApiKey || '';
       model = env.anthropicModel;
+    } else {
+      apiKey = env.aliyunApiKey || '';
+      model = env.aliyunModel;
     }
 
     info('正在解析推荐结果...');

@@ -4,6 +4,8 @@
  */
 
 import { runLLMTests } from './unit/llm.test';
+import { testAmapAPI } from './unit/amap.test';
+import { testBaoAnXiangXiangRecommendation } from './integration/baoan-xiangxiang.test';
 
 type TestType = 'unit' | 'integration' | 'e2e' | 'performance';
 
@@ -49,11 +51,13 @@ async function main() {
     if (!filter || filter === 'unit') {
       console.log('\n📌 执行单元测试...');
       await runLLMTests();
+      await testAmapAPI();
     }
 
     // 集成测试
     if (!filter || filter === 'integration') {
-      console.log('\n📌 集成测试 - 暂未实现');
+      console.log('\n📌 执行集成测试...');
+      await testBaoAnXiangXiangRecommendation();
     }
 
     // E2E 测试

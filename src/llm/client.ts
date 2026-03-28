@@ -7,7 +7,7 @@ const logger = createLogger('llm:client');
 
 /**
  * 通用 LLM 客户端
- * 支持 OpenAI 和 Anthropic Claude
+ * 支持 OpenAI、Anthropic Claude 和阿里云百炼
  */
 export class LLMClient implements ILLMClient {
   private config: LLMConfig;
@@ -39,6 +39,16 @@ export class LLMClient implements ILLMClient {
         apiKey: this.config.apiKey,
         timeout: this.config.timeout || 60000,
       });
+    } else if (this.config.provider === 'aliyun') {
+      // 阿里云百炼使用与 OpenAI 兼容的 API
+      this.openaiClient = new OpenAI({
+        apiKey: this.config.apiKey,
+        baseURL: this.config.baseUrl || 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        timeout: this.config.timeout || 60000,
+        defaultHeaders: {
+          'x-dashscope-oai-model': this.config.model,
+        },
+      });
     }
   }
 
@@ -49,7 +59,7 @@ export class LLMClient implements ILLMClient {
     const mergedConfig = { ...this.config, ...(config || {}) };
 
     try {
-      if (mergedConfig.provider === 'openai') {
+      if (mergedConfig.provider === 'openai' || mergedConfig.provider === 'aliyun') {
         return await this.callOpenAI(messages, mergedConfig);
       } else if (mergedConfig.provider === 'anthropic') {
         return await this.callAnthropic(messages, mergedConfig);
