@@ -22,6 +22,7 @@
     "test:integration": "node --loader tsx src/__tests__/runner.ts --filter integration",
     "test:e2e": "node --loader tsx src/__tests__/runner.ts --filter e2e",
     "test:perf": "node --loader tsx src/__tests__/runner.ts --filter performance",
+    "test:llm": "tsx scripts/test-llm.ts",
     "clean": "rm -rf dist"
   },
   "keywords": [

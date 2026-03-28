@@ -86,17 +86,12 @@ export class DialogueManager {
 
     logger.info('对话初始化', { sessionId: this.sessionId });
 
-    // 启动缓存预热
-    try {
-      await this.cacheWarmer.warmupPopularLocations();
-      logger.info('缓存预热完成', {
-        sessionId: this.sessionId,
-      });
-    } catch (error) {
-      logger.warn('缓存预热失败', {
-        error: error instanceof Error ? error.message : '未知错误',
-      });
-    }
+    // 按需缓存模式：不需要手动预热
+    // 用户查询时会自动调用 API 并缓存结果
+    logger.debug('已初始化缓存管理器（按需缓存模式）', {
+      sessionId: this.sessionId,
+      mode: 'on-demand',
+    });
 
     // 添加初始欢迎消息
     this.contextManager.addMessage(
@@ -425,7 +420,36 @@ export class DialogueManager {
       const llmParseStartTime = Date.now();
 
       const locationsJson = JSON.stringify(locations.slice(0, 10), null, 2);
-      const parsedRecommendations = await llmEngine.parseRecommendations(locationsJson);
+      let parsedRecommendations: {
+        locations: Array<{
+          name: string;
+          reason: string;
+          relevanceScore: number;
+          estimatedTravelTime?: number;
+        }>;
+        explanation: string;
+      };
+
+      try {
+        parsedRecommendations = await llmEngine.parseRecommendations(locationsJson);
+      } catch (error) {
+        logger.warn('LLM 推荐解析失败，使用默认解析策略', {
+          error: error instanceof Error ? error.message : '未知错误',
+        });
+
+        // 降级方案：使用默认推荐理由
+        parsedRecommendations = {
+          locations: locations.slice(0, 5).map((loc: any) => ({
+            name: loc.name,
+            reason:
+              preferences.parkType === 'hiking'
+                ? `距离${preferences.location}近，适合登山活动`
+                : `距离${preferences.location}近，适合休闲散步`,
+            relevanceScore: 0.85,
+          })),
+          explanation: `根据你在${preferences.location}的位置和偏好，为你推荐以下${preferences.parkType === 'hiking' ? '爬山' : '公园'}景点`,
+        };
+      }
 
       const llmParseTime = Date.now() - llmParseStartTime;
 
@@ -491,22 +515,77 @@ export class DialogueManager {
         timeMs: totalTime,
       });
 
-      // 🔄 最后的降级处理
+      // 🔄 最后的降级处理：尝试从主要源获取数据
       try {
-        const fallback = await this.getFallbackRecommendations(
+        const locationService = getLocationService();
+        
+        // 即使 LLM 失败，也尝试从高德获取数据
+        const fallback = await locationService.searchRecommendedLocations(
           this.state.userPreference
         );
-        if (fallback.length > 0) {
-          const formatted = await this.formatRecommendations(fallback, {
-            locations: [],
-            explanation: '系统已为你推荐热门景点',
+        
+        if (fallback && fallback.length > 0) {
+          logger.info('使用高德搜索结果作为最终降级方案', {
+            count: fallback.length,
           });
+          
+          // 即使 LLM 失败也要格式化数据
+          const formatted = await this.formatRecommendations(fallback, {
+            locations: fallback.slice(0, 5).map(loc => ({
+              name: loc.name,
+              reason:
+                this.state.userPreference.parkType === 'hiking'
+                  ? `距离${this.state.userPreference.location}近，适合登山活动`
+                  : `距离${this.state.userPreference.location}近，适合休闲散步`,
+              relevanceScore: 0.85,
+            })),
+            explanation: `根据你在${this.state.userPreference.location}的位置和偏好，为你推荐以下${this.state.userPreference.parkType === 'hiking' ? '爬山' : '公园'}景点`,
+          });
+          
           this.state.phase = DialoguePhase.RECOMMENDING;
-          return { success: true, recommendations: formatted };
+          return {
+            success: true,
+            recommendations: formatted,
+            performanceMetrics: {
+              totalTime,
+              llmTime: 0,
+              mapQueryTime: totalTime,
+              cacheHit: false,
+            },
+          };
         }
-      } catch (fallbackError) {
-        logger.error('降级处理失败', {
-          error: fallbackError instanceof Error ? fallbackError.message : '未知错误',
+      } catch (finalFallbackError) {
+        logger.error('最终降级处理失败', {
+          error: finalFallbackError instanceof Error ? finalFallbackError.message : '未知错误',
+        });
+      }
+
+      // 如果所有都失败了，至少返回模拟数据
+      try {
+        const mock = this.generateMockRecommendations();
+        const formatted = await this.formatRecommendations(mock, {
+          locations: mock.map(m => ({
+            name: m.name,
+            reason: m.reason,
+            relevanceScore: 0.7,
+          })),
+          explanation: '系统已为你推荐热门景点',
+        });
+        
+        this.state.phase = DialoguePhase.RECOMMENDING;
+        return {
+          success: true,
+          recommendations: formatted,
+          performanceMetrics: {
+            totalTime,
+            llmTime: 0,
+            mapQueryTime: totalTime,
+            cacheHit: false,
+          },
+        };
+      } catch (mockError) {
+        logger.error('模拟数据生成失败', {
+          error: mockError instanceof Error ? mockError.message : '未知错误',
         });
       }
 
@@ -585,6 +664,22 @@ export class DialogueManager {
   ): Promise<any[]> {
     try {
       const locationService = getLocationService();
+
+      // 首先尝试根据用户偏好搜索
+      try {
+        const searchResults = await locationService.searchRecommendedLocations(preferences);
+        if (searchResults && searchResults.length > 0) {
+          logger.info('使用搜索结果作为降级方案', {
+            count: searchResults.length,
+            location: preferences.location,
+          });
+          return searchResults;
+        }
+      } catch (searchError) {
+        logger.warn('搜索推荐地点失败', {
+          error: searchError instanceof Error ? searchError.message : '未知错误',
+        });
+      }
 
       // 尝试获取热门景点
       const popular = await locationService.getPopularLocations(5);

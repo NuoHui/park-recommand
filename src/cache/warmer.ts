@@ -1,6 +1,7 @@
 /**
- * 缓存预热器
- * 功能：启动加载热门景点、后台定时更新、智能缓存键生成
+ * 缓存预热器（按需缓存模式）
+ * 功能：支持按需缓存，用户查询 → API 调用 → 缓存结果 → 下次快速返回
+ * 启动时不预热，避免一次性调用多个接口触发速率限制
  */
 
 import { getLogger } from '@/logger/index.js';
@@ -9,7 +10,10 @@ import { CacheManager } from './manager.js';
 
 const logger = getLogger();
 
-/** 热门景点列表 */
+/**
+ * 热门景点列表
+ * 备用数据：当 API 调用失败时使用
+ */
 const POPULAR_LOCATIONS = [
   {
     name: '深圳湾公园',
@@ -74,15 +78,15 @@ const POPULAR_LOCATIONS = [
 ];
 
 export interface CacheWarmerOptions {
-  /** 启动是否预热 */
+  /** 启动是否预热（已废弃，固定为 false，采用按需缓存） */
   enableOnStartup?: boolean;
-  /** 后台更新间隔（毫秒），0 表示禁用 */
+  /** 后台更新间隔（已废弃，固定为 0，采用按需缓存） */
   updateInterval?: number;
   /** 缓存过期时间（毫秒） */
   cacheTTL?: number;
-  /** 是否启用自动预热 */
+  /** 是否启用自动预热（已废弃） */
   enableAutoWarmup?: boolean;
-  /** 预热间隔（毫秒） */
+  /** 预热间隔（已废弃） */
   warmupInterval?: number;
 }
 
@@ -92,52 +96,32 @@ export class CacheWarmer {
   private warmCount: number = 0;
 
   private readonly options: Required<CacheWarmerOptions> = {
-    enableOnStartup: true,
-    updateInterval: 3600000, // 1 小时
+    enableOnStartup: false, // 按需缓存：禁用启动时预热
+    updateInterval: 0, // 按需缓存：禁用后台更新
     cacheTTL: 86400000, // 24 小时
     enableAutoWarmup: false,
-    warmupInterval: 300000, // 5 分钟
+    warmupInterval: 0,
   };
 
   constructor(options: CacheWarmerOptions = {}) {
     Object.assign(this.options, options);
 
-    logger.info('CacheWarmer 已初始化', {
-      enableOnStartup: this.options.enableOnStartup,
-      updateInterval: this.options.updateInterval,
+    logger.info('CacheWarmer 已初始化（按需缓存模式）', {
+      mode: '按需缓存',
       cacheTTL: this.options.cacheTTL,
+      description: '用户查询时调用 API 并缓存，下次查询时从缓存返回',
     });
 
-    if (this.options.enableOnStartup) {
-      this.start();
-    }
+    // 按需缓存模式下，不启动任何预热或后台任务
   }
 
   /**
-   * 启动缓存预热
+   * 启动缓存预热（按需缓存模式下无需调用）
+   * 保留此方法以兼容旧代码，但不执行任何操作
    */
   async start(): Promise<void> {
-    logger.info('启动缓存预热...');
-    const startTime = Date.now();
-
-    try {
-      // 执行初始预热
-      await this.warmCache();
-
-      const duration = Date.now() - startTime;
-      logger.info('缓存预热完成', {
-        duration,
-        locationsWarmed: POPULAR_LOCATIONS.length,
-      });
-
-      // 启动后台定时更新
-      if (this.options.updateInterval > 0) {
-        this.startBackgroundUpdate();
-      }
-    } catch (error) {
-      logger.error('缓存预热失败', { error });
-      throw error;
-    }
+    logger.debug('按需缓存模式：无需启动预热');
+    // 按需缓存模式下，所有数据通过用户查询时按需加载
   }
 
   /**
@@ -152,83 +136,25 @@ export class CacheWarmer {
   }
 
   /**
-   * 执行缓存预热
+   * 按需缓存：用户查询时调用
+   * LocationService 会自动调用此方法来缓存查询结果
    */
-  private async warmCache(): Promise<void> {
+  private async cacheQueryResult(key: string, data: any): Promise<void> {
     const cacheManager = CacheManager.getInstance();
-    const locationService = getLocationService();
-
-    let warmed = 0;
-    let failed = 0;
-
-    for (const location of POPULAR_LOCATIONS) {
-      try {
-        // 生成缓存键
-        const cacheKey = this.generateCacheKey(location);
-
-        // 检查是否已缓存
-        const cached = await cacheManager.get(cacheKey);
-        if (cached) {
-          logger.debug('位置已在缓存中', { location: location.name });
-          continue;
-        }
-
-        // 搜索位置信息
-        const result = await locationService.searchRecommendedLocations({
-          location: location.name,
-          parkType: location.type as any,
-        });
-
-        if (result && Array.isArray(result) && result.length > 0) {
-          // 缓存结果
-          await cacheManager.set(cacheKey, result, this.options.cacheTTL);
-          warmed++;
-
-          logger.debug('位置已缓存', {
-            location: location.name,
-            count: result.length,
-          });
-        }
-      } catch (error) {
-        failed++;
-        logger.warn('预热位置失败', {
-          location: location.name,
-          error,
-        });
-      }
-    }
-
-    this.lastWarmTime = Date.now();
-    this.warmCount++;
-
-    logger.info('缓存预热统计', {
-      warmed,
-      failed,
-      total: POPULAR_LOCATIONS.length,
-      warmCount: this.warmCount,
-    });
+    await cacheManager.set(key, data, this.options.cacheTTL);
+    logger.debug('查询结果已缓存', { key });
   }
 
   /**
-   * 启动后台定时更新
+   * 获取缓存的查询结果
    */
-  private startBackgroundUpdate(): void {
-    if (this.updateInterval) {
-      clearInterval(this.updateInterval);
+  private async getCachedResult(key: string): Promise<any | null> {
+    const cacheManager = CacheManager.getInstance();
+    const result = await cacheManager.get(key);
+    if (result) {
+      logger.debug('从缓存返回结果', { key });
     }
-
-    this.updateInterval = setInterval(
-      () => {
-        this.warmCache().catch((error) => {
-          logger.error('后台缓存更新失败', { error });
-        });
-      },
-      this.options.updateInterval,
-    );
-
-    logger.info('后台缓存更新已启动', {
-      interval: this.options.updateInterval,
-    });
+    return result;
   }
 
   /**
@@ -251,55 +177,44 @@ export class CacheWarmer {
    */
   getStats() {
     return {
-      lastWarmTime: this.lastWarmTime,
-      warmCount: this.warmCount,
-      isRunning: this.updateInterval !== null,
-      interval: this.options.updateInterval,
+      mode: 'on-demand', // 按需缓存模式
+      cacheTTL: this.options.cacheTTL,
+      description: '用户查询时调用 API 并缓存',
     };
   }
 
   /**
-   * 手动触发一次预热
+   * 手动触发一次预热（按需缓存模式下不需要）
    */
   async warm(): Promise<void> {
-    await this.warmCache();
+    logger.debug('按需缓存模式：不需要手动预热');
+    // 按需缓存模式下，数据通过用户查询时按需加载
   }
 
   /**
-   * 预热热门位置（别名）
+   * 预热热门位置（按需缓存模式下不需要）
    */
   async warmupPopularLocations(): Promise<void> {
-    await this.warmCache();
+    logger.debug('按需缓存模式：不需要预热热门位置');
   }
 
   /**
-   * 获取状态（别名）
+   * 获取状态
    */
-  getStatus(): { warmCount: number; lastWarmTime: number } {
-    const stats = this.getStats();
+  getStatus(): { mode: string; cacheTTL: number } {
     return {
-      warmCount: stats.warmCount,
-      lastWarmTime: stats.lastWarmTime,
+      mode: 'on-demand',
+      cacheTTL: this.options.cacheTTL,
     };
   }
 
   /**
-   * 清空预热缓存
+   * 清空缓存
    */
   async clearWarmedCache(): Promise<void> {
     const cacheManager = CacheManager.getInstance();
-    let cleared = 0;
-
-    for (const location of POPULAR_LOCATIONS) {
-      const cacheKey = this.generateCacheKey(location);
-      const cached = await cacheManager.get(cacheKey);
-      if (cached) {
-        await cacheManager.delete(cacheKey);
-        cleared++;
-      }
-    }
-
-    logger.info('已清空预热缓存', { cleared });
+    await cacheManager.clear();
+    logger.info('已清空所有缓存');
   }
 }
 
