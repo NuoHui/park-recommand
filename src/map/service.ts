@@ -73,7 +73,7 @@ export class LocationService {
       logger.debug('搜索推荐地点', { preference });
 
       const keywords = this.buildSearchKeywords(preference);
-      const region = 'shenzhen'; // 专注深圳
+      const region = '深圳'; // 高德 API 需要中文地区名称
 
       const params: MapSearchParams = {
         keywords,
@@ -128,7 +128,7 @@ export class LocationService {
   /**
    * 获取单个地点详情
    */
-  async getLocationDetails(name: string, region = 'shenzhen'): Promise<Location | null> {
+  async getLocationDetails(name: string, region = '深圳'): Promise<Location | null> {
     try {
       // 检查缓存
       const cacheKey = `${name}:${region}`;
@@ -246,7 +246,7 @@ export class LocationService {
       const keywords = '公园|景区|山峰';
       const response = await this.client.searchPOI({
         keywords,
-        region: 'shenzhen',
+        region: '深圳', // 高德 API 需要中文地区名称
         pageSize: Math.min(limit, 25),
         pageNum: 1,
       });
@@ -327,10 +327,23 @@ export class LocationService {
    * 转换高德 POI 为 Location 对象
    */
   private convertPOI(poi: MapPOI): Location {
+    // 高德 API 返回的 location 格式: "经度,纬度" (字符串)
+    let latitude = 0;
+    let longitude = 0;
+
+    if (typeof poi.location === 'string') {
+      const [lon, lat] = poi.location.split(',').map(Number);
+      latitude = lat;
+      longitude = lon;
+    } else if (poi.location && typeof poi.location === 'object') {
+      latitude = (poi.location as any).latitude || 0;
+      longitude = (poi.location as any).longitude || 0;
+    }
+
     return {
       name: poi.name,
-      latitude: poi.location.latitude,
-      longitude: poi.location.longitude,
+      latitude,
+      longitude,
       address: poi.address,
       tags: this.extractTags(poi),
       phone: poi.phone,

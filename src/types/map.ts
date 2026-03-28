@@ -9,10 +9,10 @@ export interface MapPOI {
   id: string;
   name: string;
   type: string; // 地点类型
-  location: {
+  location: string | {
     latitude: number;
     longitude: number;
-  };
+  }; // 高德 API 返回格式: "经度,纬度" (字符串)
   address: string;
   district: string; // 行政区划
   cityCode: string;
