@@ -3,14 +3,11 @@
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║            🔍 Pre-Commit Checks                            ║"
-echo "║  Running: Unit, Integration, and E2E Tests                ║"
+echo "║            🔍 Pre-Commit: Running Tests                    ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
-# 运行所有测试
-echo "📋 Running all tests..."
-npm run test:all
+npm run test
 
 if [ $? -ne 0 ]; then
   echo ""
@@ -18,18 +15,14 @@ if [ $? -ne 0 ]; then
   echo "║             ❌ Tests Failed - Commit Blocked               ║"
   echo "╚════════════════════════════════════════════════════════════╝"
   echo ""
-  echo "💡 Fix the failing tests and try again:"
-  echo "   • npm run test:unit          - Run unit tests"
-  echo "   • npm run test:integration   - Run integration tests"
-  echo "   • npm run test:e2e           - Run e2e tests"
-  echo "   • npm run test:all           - Run all tests"
+  echo "💡 修复失败的测试后重新提交："
+  echo "   npm run test                 - 运行所有测试"
   echo ""
   exit 1
 fi
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║             ✅ All Tests Passed                            ║"
-echo "║             Proceeding with commit...                      ║"
+echo "║             ✅ Tests Passed - Committing                   ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""

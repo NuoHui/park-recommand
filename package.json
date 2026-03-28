@@ -65,5 +65,10 @@
       "eslint --fix",
       "prettier --write"
     ]
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "npm run test"
+    }
   }
 }
