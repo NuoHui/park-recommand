@@ -4,13 +4,17 @@
   "description": "CLI Agent for recommending parks and hiking spots in Shenzhen",
   "main": "dist/index.js",
   "type": "module",
+  "bin": {
+    "park-recommender": "./dist/index.js"
+  },
   "scripts": {
-    "dev": "npm run build && tsx dist/index.js",
+    "dev": "npm run build && npm link && npm run dev:watch",
+    "dev:build": "npm run build && npm link",
     "dev:watch": "tsx src/index.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/fix-paths.cjs",
     "prebuild": "npm run clean",
-    "postbuild": "chmod +x dist/index.js dist/cli.js 2>/dev/null || true",
-    "start": "tsx dist/index.js",
+    "postbuild": "chmod +x dist/index.js 2>/dev/null || true",
+    "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write src",
     "test": "node --loader tsx src/__tests__/runner.ts",

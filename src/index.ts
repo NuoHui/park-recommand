@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { createLogger } from '@/utils/logger';
 import { runCLI } from '@/cli/index';
 
