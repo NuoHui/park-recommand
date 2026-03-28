@@ -1,0 +1,21 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# 获取提交信息
+commit_msg=$(cat "$1")
+
+# 验证提交信息不为空
+if [ -z "$commit_msg" ]; then
+  echo "❌ Commit message cannot be empty"
+  exit 1
+fi
+
+# 验证提交信息长度（至少 10 个字符）
+if [ ${#commit_msg} -lt 10 ]; then
+  echo "❌ Commit message is too short (minimum 10 characters)"
+  echo "   Current length: ${#commit_msg}"
+  exit 1
+fi
+
+# 提示信息
+echo "✅ Commit message validation passed"

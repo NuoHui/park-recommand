@@ -1,183 +1,253 @@
-# 📚 文档导航
+# 📚 文档指南
 
-欢迎来到深圳公园景点推荐 CLI Agent 的完整文档。此页面提供所有文档的快速访问指南。
+## 🎯 快速导航
 
-## 🚀 快速开始
+### 👤 我想快速开始
+→ **`guides/HOW-TO-RUN-TESTS.md`** - 5 分钟快速开始
 
-**首次使用？从这里开始：**
+### 🧪 我想运行测试
+→ **`guides/QUICK-TEST-GUIDE.md`** - 测试快速指南
 
-1. [安装指南](./getting-started/installation.md) - 设置环境和安装依赖
-2. [配置说明](./getting-started/configuration.md) - 配置 API Keys
-3. [首次运行](./getting-started/first-run.md) - 启动应用并了解基本操作
+### 🔧 我想配置 Git Hooks
+→ **`guides/GIT-HOOKS-GUIDE.md`** - Git Hooks 详细说明
 
-**预计时间**: 5-10 分钟
+### 💻 我是开发者，想深入了解
+→ **`guides/LLM-TESTING-GUIDE.md`** - LLM 完整文档  
+→ **`guides/E2E-TESTING-GUIDE.md`** - E2E 测试文档
 
-## 📖 使用指南
+### 🐛 我遇到了问题
+→ **`guides/TROUBLESHOOTING.md`** - 故障排除指南
 
-**想了解如何使用应用？**
+---
 
-- [基础使用](./guides/usage.md) - 学习基本命令和交互流程
-- [命令参考](./guides/commands.md) - 完整的命令列表和选项
-- [常见问题](./guides/troubleshooting.md) - 解决常见问题
-
-## 🏗️ 架构设计
-
-**想深入了解系统设计？**
-
-- [系统架构概览](./architecture/overview.md) - 整体架构和模块设计
-- [CLI 框架设计](./architecture/cli-framework.md) - CLI 实现细节
-- [对话引擎设计](./architecture/dialogue-engine.md) - 多轮对话管理
-- [LLM 集成设计](./architecture/llm-integration.md) - LLM 服务集成
-- [地图 API 集成](./architecture/map-api.md) - 地图服务集成
-
-## 🔧 开发指南
-
-**想参与开发或扩展功能？**
-
-- [开发环境设置](./development/setup.md) - 配置开发环境
-- [代码结构指南](./development/code-structure.md) - 了解项目代码组织
-- [测试指南](./development/testing.md) - 编写和运行测试
-- [贡献指南](./development/contributing.md) - 提交代码的流程和规范
-
-## 📚 API 文档
-
-**需要了解模块的 API？**
-
-- [缓存系统 API](./api/cache-system.md) - 缓存管理和使用
-- [结果解析 API](./api/result-parser.md) - 解析 LLM 和地图 API 结果
-- [日志系统 API](./api/logging.md) - 记录和分析日志
-
-## 📋 文档目录结构
+## 📁 文档目录结构
 
 ```
 docs/
-├── README.md                    # 当前文档（导航首页）
+├── README.md                 (本文件)
+├── INDEX.md                  (详细文档索引)
 │
-├── getting-started/             # 快速开始
-│   ├── installation.md         # 安装指南
-│   ├── configuration.md        # 配置说明
-│   └── first-run.md            # 首次运行
+├── guides/                   (📖 使用指南 - 日常使用)
+│   ├── HOW-TO-RUN-TESTS.md
+│   ├── QUICK-TEST-GUIDE.md
+│   ├── TESTING-QUICK-START.md
+│   ├── QUICK-START.md
+│   ├── LLM-TESTING-GUIDE.md
+│   ├── LLM-USAGE-EXAMPLES.md
+│   ├── E2E-TESTING-GUIDE.md
+│   ├── GIT-HOOKS-GUIDE.md
+│   └── TROUBLESHOOTING.md
 │
-├── guides/                      # 使用指南
-│   ├── usage.md                # 基础使用
-│   ├── commands.md             # 命令参考
-│   └── troubleshooting.md      # 故障排查
+├── reports/                  (📊 技术报告 - 参考资料)
+│   ├── DESIGN-REVIEW.md
+│   ├── ARCHITECTURE-CHECKLIST.md
+│   ├── IMPLEMENTATION-REPORT.md
+│   └── ... (15+ 其他报告)
 │
-├── architecture/                # 架构设计
-│   ├── overview.md             # 架构总览
-│   ├── cli-framework.md        # CLI 框架
-│   ├── dialogue-engine.md      # 对话引擎
-│   ├── llm-integration.md      # LLM 集成
-│   └── map-api.md              # 地图 API
+├── specs/                    (📋 规范文档 - 技术规范)
+│   ├── INTEGRATION-FLOW.md
+│   ├── integration-guide.md
+│   ├── ON-DEMAND-CACHING.md
+│   └── ... (其他集成文档)
 │
-├── development/                 # 开发指南
-│   ├── setup.md                # 开发环境
-│   ├── code-structure.md       # 代码结构
-│   ├── testing.md              # 测试指南
-│   └── contributing.md         # 贡献指南
-│
-├── api/                         # API 文档
-│   ├── cache-system.md         # 缓存系统
-│   ├── result-parser.md        # 结果解析
-│   └── logging.md              # 日志系统
-│
-└── performance/                 # 性能优化（预留）
-    └── optimization.md         # 性能优化指南
+└── archives/                 (📦 归档文件 - 过时文档)
+    ├── AMAP-CHECKLIST.md
+    ├── LEGACY_DOCS.md
+    └── ... (历史文档)
 ```
 
-## 🎯 按角色查找文档
+---
 
-### 👤 新用户
+## 📖 按用途分类
 
-想快速上手应用？
+### 🚀 **新用户/快速开始**
+1. `guides/HOW-TO-RUN-TESTS.md` - 首先读这个
+2. `guides/QUICK-TEST-GUIDE.md` - 快速运行测试
+3. `guides/QUICK-START.md` - 项目快速开始
 
-1. [安装指南](./getting-started/installation.md) - 5 分钟完成安装
-2. [首次运行](./getting-started/first-run.md) - 启动应用
-3. [基础使用](./guides/usage.md) - 了解基本功能
+### 🧪 **测试工程师**
+- `guides/TESTING-QUICK-START.md` - 测试入门
+- `guides/UNIT-TESTING-SETUP.md` - 单元测试设置
+- `guides/E2E-TESTING-GUIDE.md` - E2E 测试
+- `guides/LLM-TESTING-GUIDE.md` - LLM 测试
+- `guides/QUICK-TEST-GUIDE.md` - 快速参考
 
-### 👨‍💻 开发者
+### 💻 **开发者**
+- `guides/LLM-TESTING-GUIDE.md` - LLM 完整文档
+- `guides/LLM-USAGE-EXAMPLES.md` - 代码示例
+- `guides/GIT-HOOKS-GUIDE.md` - 提交前检查
+- `specs/INTEGRATION-FLOW.md` - 集成规范
+- `reports/IMPLEMENTATION-REPORT.md` - 实现细节
 
-想参与项目开发？
+### 🏗️ **架构师/技术主管**
+- `reports/DESIGN-REVIEW.md` - 设计审查
+- `reports/ARCHITECTURE-CHECKLIST.md` - 架构检查清单
+- `reports/IMPLEMENTATION-SUMMARY.md` - 实现总结
+- `specs/integration-guide.md` - 集成指南
 
-1. [开发环境设置](./development/setup.md) - 配置开发环境
-2. [代码结构指南](./development/code-structure.md) - 了解项目结构
-3. [系统架构](./architecture/overview.md) - 理解系统设计
-4. [API 文档](./api/cache-system.md) - 模块 API 参考
-5. [测试指南](./development/testing.md) - 编写测试
-6. [贡献指南](./development/contributing.md) - 提交代码
-
-### 🏗️ 架构师
-
-想了解系统设计？
-
-1. [系统架构概览](./architecture/overview.md) - 整体设计
-2. 各模块架构文档 - 深入了解各部分设计
-3. [性能优化](./performance/optimization.md) - 性能考虑
-
-### 🐛 运维人员
-
-需要排查问题？
-
-1. [常见问题](./guides/troubleshooting.md) - 快速解决常见问题
-2. [日志系统](./api/logging.md) - 分析日志
-3. [配置说明](./getting-started/configuration.md) - 调整配置
-
-## ❓ 快速问题解答
-
-### 如何安装？
-→ 查看 [安装指南](./getting-started/installation.md)
-
-### 如何配置 API Keys？
-→ 查看 [配置说明](./getting-started/configuration.md)
-
-### 应用无法启动？
-→ 查看 [常见问题](./guides/troubleshooting.md)
-
-### 如何获得最佳性能？
-→ 查看 [性能优化](./performance/optimization.md) 和 [缓存系统](./api/cache-system.md)
-
-### 如何贡献代码？
-→ 查看 [贡献指南](./development/contributing.md)
-
-### 如何理解代码结构？
-→ 查看 [代码结构指南](./development/code-structure.md)
-
-## 🔍 文档特点
-
-✅ **完整**: 涵盖安装、使用、开发的全方位内容  
-✅ **易用**: 清晰的分类和导航，快速找到所需内容  
-✅ **实用**: 包含代码示例、最佳实践和常见问题  
-✅ **最新**: 随项目更新而更新
-
-## 📞 获取帮助
-
-如果文档中找不到答案：
-
-1. **检查 [常见问题](./guides/troubleshooting.md)** - 可能已有解答
-2. **查看 [日志](./api/logging.md)** - 查看错误信息
-3. **提交 Issue** - 在 GitHub 上报告问题
-4. **参与讨论** - 在社区中寻求帮助
-
-## 🤝 提出改进建议
-
-文档还能改进吗？欢迎提出建议或提交 PR！
-
-查看 [贡献指南](./development/contributing.md) 了解如何参与。
-
-## 📝 许可证
-
-所有文档均采用 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 许可证。
+### 🔍 **问题排查**
+- `guides/TROUBLESHOOTING.md` - 故障排除指南
+- `reports/DIAGNOSIS-REPORT.md` - 诊断报告
+- `reports/ISSUE-ANALYSIS.md` - 问题分析
 
 ---
 
-## 文档更新历史
+## 🎯 常见任务
 
-| 版本 | 日期 | 更新内容 |
-|------|------|--------|
-| 1.0 | 2024-01-15 | 初始文档创建，包含所有核心模块文档 |
+### 任务 1: 运行测试
+```bash
+# 查看文档
+cat guides/HOW-TO-RUN-TESTS.md
 
-**最后更新**: 2024-01-15
+# 然后运行
+npm run test:all
+```
+
+### 任务 2: 配置 Git Hooks
+```bash
+# 查看指南
+cat guides/GIT-HOOKS-GUIDE.md
+
+# 然后正常提交
+git commit -m "your message"
+```
+
+### 任务 3: 学习 LLM 功能
+```bash
+# 查看完整指南
+cat guides/LLM-TESTING-GUIDE.md
+
+# 查看代码示例
+cat guides/LLM-USAGE-EXAMPLES.md
+```
+
+### 任务 4: 参与开发
+```bash
+# 了解架构
+cat reports/DESIGN-REVIEW.md
+
+# 了解集成流程
+cat specs/INTEGRATION-FLOW.md
+
+# 查看代码示例
+cat guides/LLM-USAGE-EXAMPLES.md
+```
 
 ---
 
-**返回 [项目首页](../README.md)**
+## 📊 文档统计
+
+| 分类 | 文件数 | 用途 |
+|------|--------|------|
+| **guides/** | 15+ | 日常使用、快速参考 |
+| **reports/** | 22+ | 技术分析、设计文档 |
+| **specs/** | 8+ | 技术规范、集成指南 |
+| **archives/** | 5+ | 历史文档、过时内容 |
+
+**总计**: ~50 个文档，清晰分类
+
+---
+
+## 💡 如何使用
+
+### 方法 1: 按角色选择
+```bash
+# 新手用户
+cat guides/HOW-TO-RUN-TESTS.md
+
+# 开发者
+cat guides/LLM-TESTING-GUIDE.md
+cat guides/LLM-USAGE-EXAMPLES.md
+
+# 架构师
+cat reports/DESIGN-REVIEW.md
+```
+
+### 方法 2: 按任务选择
+```bash
+# 运行测试
+cat guides/QUICK-TEST-GUIDE.md
+
+# 提交代码
+cat guides/GIT-HOOKS-GUIDE.md
+
+# 集成功能
+cat specs/INTEGRATION-FLOW.md
+```
+
+### 方法 3: 查看完整索引
+```bash
+cat INDEX.md
+```
+
+---
+
+## ⚡ 最常用的文件
+
+```
+✅ guides/HOW-TO-RUN-TESTS.md              - 必读
+✅ guides/QUICK-TEST-GUIDE.md              - 快速参考
+✅ guides/GIT-HOOKS-GUIDE.md               - 提交前检查
+✅ guides/LLM-TESTING-GUIDE.md             - 开发必读
+✅ guides/TROUBLESHOOTING.md               - 遇到问题时查看
+```
+
+---
+
+## 🚀 建议阅读顺序
+
+**第一次使用 (30 分钟)**
+```
+1. guides/HOW-TO-RUN-TESTS.md (5 min)
+2. guides/QUICK-TEST-GUIDE.md (5 min)
+3. npm run test:all (10 min)
+4. guides/TROUBLESHOOTING.md (10 min 如有问题)
+```
+
+**深入开发 (2 小时)**
+```
+1. guides/LLM-TESTING-GUIDE.md (30 min)
+2. guides/LLM-USAGE-EXAMPLES.md (30 min)
+3. reports/DESIGN-REVIEW.md (30 min)
+4. specs/INTEGRATION-FLOW.md (30 min)
+```
+
+**系统学习 (1 天)**
+```
+1. 快速开始文档
+2. 所有 guides/ 文件
+3. 相关的 reports/ 文件
+4. 相关的 specs/ 文件
+```
+
+---
+
+## 📝 文档管理
+
+- ✅ **重要文档**: 保存在 `guides/` 中，日常使用
+- ✅ **参考资料**: 保存在 `reports/` 和 `specs/` 中，需要时查看
+- ✅ **过时文档**: 保存在 `archives/` 中，保留以供参考
+
+---
+
+## 🔗 相关资源
+
+- 主 README: `../README.md` - 项目概述
+- 源代码: `../src/` - 项目代码
+- 测试代码: `../src/__tests__/` - 测试文件
+
+---
+
+## ✨ 特点
+
+✅ **清晰分类** - 文档按用途分类，易于查找  
+✅ **快速参考** - 常用文档在 `guides/` 中，开箱即用  
+✅ **详细文档** - 深入学习的详细文档在对应分类中  
+✅ **历史保留** - 旧文档保存在 `archives/` 中，方便回顾  
+✅ **专业结构** - 符合开源项目最佳实践  
+
+---
+
+**最后更新**: 2026-03-28
+
+**建议**: 首先阅读 `guides/HOW-TO-RUN-TESTS.md`，然后根据需要选择其他文档。

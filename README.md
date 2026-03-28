@@ -40,13 +40,28 @@ npm run dev
 
 ## 📖 文档导航
 
-| 分类 | 说明 | 文档 |
-|------|------|------|
-| **快速开始** | 新手第一时间需要的信息 | [安装配置](./docs/getting-started/installation.md) · [首次运行](./docs/getting-started/first-run.md) |
-| **使用指南** | 实际使用和常见问题 | [基础命令](./docs/guides/usage.md) · [常见问题](./docs/guides/troubleshooting.md) |
-| **架构设计** | 深入了解系统设计 | [系统架构](./docs/architecture/overview.md) · [CLI 框架](./docs/architecture/cli-framework.md) · [LLM 集成](./docs/architecture/llm-integration.md) |
-| **开发指南** | 开发者相关文档 | [代码结构](./docs/development/code-structure.md) · [开发环境](./docs/development/setup.md) · [测试指南](./docs/development/testing.md) |
-| **API 文档** | 详细的 API 和模块文档 | [缓存系统](./docs/api/cache-system.md) · [结果解析](./docs/api/result-parser.md) · [日志系统](./docs/api/logging.md) |
+👉 **[查看完整文档导航](./docs/README.md)** - 所有文档已分类整理
+
+### 快速链接
+
+- **测试运行**: [如何运行测试](./docs/guides/HOW-TO-RUN-TESTS.md)
+- **快速参考**: [测试快速指南](./docs/guides/QUICK-TEST-GUIDE.md)
+- **LLM 开发**: [LLM 完整指南](./docs/guides/LLM-TESTING-GUIDE.md)
+- **Git 提交**: [Git Hooks 配置](./docs/guides/GIT-HOOKS-GUIDE.md)
+- **故障排除**: [问题排查指南](./docs/guides/TROUBLESHOOTING.md)
+- **设计文档**: [系统设计审查](./docs/reports/DESIGN-REVIEW.md)
+
+### 文档结构
+
+```
+docs/
+├── README.md              ← 文档概览（首先查看）
+├── INDEX.md               ← 完整文档索引
+├── guides/                # 日常使用指南（15+ 文件）
+├── reports/               # 技术报告和分析（22+ 文件）
+├── specs/                 # 技术规范和集成（8+ 文件）
+└── archives/              # 历史文档（5+ 文件）
+```
 
 ## 🏗️ 项目结构
 
