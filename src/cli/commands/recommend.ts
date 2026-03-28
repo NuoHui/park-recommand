@@ -5,6 +5,7 @@ import { getParameterValidator } from '@/dialogue/parameter-validator';
 import { getLocationService } from '@/map/service';
 import { getLLMService } from '@/llm/service';
 import { MapSearchParams } from '@/types/map';
+import { CLIContext } from '../index';
 import * as readline from 'readline';
 
 const logger = createLogger('command:recommend');
@@ -16,15 +17,20 @@ interface RecommendOptions {
   interactive: boolean;
 }
 
-export async function recommendCommand(options: RecommendOptions): Promise<void> {
+export async function recommendCommand(options: RecommendOptions, harnessContext: CLIContext): Promise<void> {
+  if (!harnessContext) {
+    console.error(color.error('✗ 错误: Harness 上下文不可用，无法继续执行'));
+    process.exit(1);
+  }
+
   try {
     logger.info('推荐命令启动', { options });
 
     const titleBox = createTitleBox('推荐景点', 50);
     console.log('\n' + color.primary(titleBox) + '\n');
 
-    // 进入新的推荐流程
-    await newRecommendFlow();
+    // 进入推荐流程（必须通过 Harness 架构）
+    await recommendFlow(harnessContext);
   } catch (error) {
     logger.error('推荐命令失败:', error);
     const errorMsg = error instanceof Error ? error.message : '未知错误';
@@ -34,9 +40,10 @@ export async function recommendCommand(options: RecommendOptions): Promise<void>
 }
 
 /**
- * 新的推荐流程：一句话输入 → 参数提取 → 验证 → 追问/查询 → LLM 处理 → 展示结果
+ * 推荐流程：一句话输入 → 参数提取 → 验证 → 追问/查询 → LLM 处理 → 展示结果
+ * 全程通过 Harness 架构执行，确保安全性和可控性
  */
-async function newRecommendFlow(): Promise<void> {
+async function recommendFlow(harnessContext: CLIContext): Promise<void> {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -51,11 +58,10 @@ async function newRecommendFlow(): Promise<void> {
   };
 
   try {
-    // 初始化服务
+    // 初始化参数提取器和验证器（仅用于本地参数处理）
     const extractor = getParameterExtractor();
     const validator = getParameterValidator();
     const llmService = getLLMService();
-    const locationService = getLocationService();
 
     if (!llmService.isInitialized()) {
       await llmService.initialize();
@@ -83,8 +89,14 @@ async function newRecommendFlow(): Promise<void> {
     console.log('');
     console.log(color.info('[i] 分析你的需求...'));
 
-    // 第二步：LLM 提取参数
-    const extractedParams = await extractor.extractParameters(userInput);
+    // 第二步：LLM 提取参数（通过 Harness 执行）
+    const extractedParams = await harnessContext.llmWrapper.executeExtraction(
+      'extract_parameters',
+      { userInput },
+      async () => {
+        return extractor.extractParameters(userInput);
+      }
+    );
 
     logger.info('参数提取结果', {
       keywords: extractedParams.keywords,
@@ -123,11 +135,17 @@ async function newRecommendFlow(): Promise<void> {
           if (answer.trim()) {
             askCount++;
             
-            // 调用带上下文的参数提取器，而不是简单的 updateFromUserInput
-            const updatedParams = await extractor.extractParametersWithContext(
-              answer,
-              currentParams,
-              Array.from(askedFields)
+            // 调用带上下文的参数提取器，通过 Harness 执行
+            const updatedParams = await harnessContext.llmWrapper.executeExtraction(
+              'extract_parameters_with_context',
+              { answer, currentParams, askedFields: Array.from(askedFields) },
+              async () => {
+                return extractor.extractParametersWithContext(
+                  answer,
+                  currentParams,
+                  Array.from(askedFields)
+                );
+              }
             );
 
             // ⭐ 完整合并提取结果，保留所有多层级地址信息
@@ -214,9 +232,16 @@ async function newRecommendFlow(): Promise<void> {
     );
     console.log('');
 
-    // 第四步：调用高德 API 查询
+    // 第四步：调用高德 API 查询（通过 Harness 执行）
     console.log(color.info('[i] 正在查询...'));
-    const mapResult = await locationService.searchPOI(searchParams);
+    const mapResult = await harnessContext.mapWrapper.executePOISearch(
+      'search_poi',
+      searchParams,
+      async () => {
+        const locationService = getLocationService();
+        return locationService.searchPOI(searchParams);
+      }
+    );
 
     logger.info('高德 API 查询结果', {
       count: mapResult.count,
@@ -239,13 +264,14 @@ async function newRecommendFlow(): Promise<void> {
       )
     );
 
-    // 第五步：LLM 处理高德结果并生成详细推荐
+    // 第五步：LLM 处理高德结果并生成详细推荐（通过 Harness 执行）
     console.log(color.info('[i] 分析推荐...'));
     const recommendations = await processRecommendations(
       mapResult.pois,
       userInput,
       searchParams,
-      llmService
+      llmService,
+      harnessContext
     );
 
     // 第六步：展示结果
@@ -259,7 +285,7 @@ async function newRecommendFlow(): Promise<void> {
 
     if (continueChoice.toLowerCase() === 'y') {
       console.log('');
-      await newRecommendFlow();
+      await recommendFlow(harnessContext);
     } else {
       console.log(color.success('[✓] 感谢使用推荐系统！'));
       rl.close();
@@ -275,12 +301,14 @@ async function newRecommendFlow(): Promise<void> {
 
 /**
  * 使用 LLM 处理高德 API 返回的数据，生成详细推荐
+ * 必须通过 Harness 架构执行
  */
 async function processRecommendations(
   pois: any[],
   userInput: string,
   searchParams: MapSearchParams,
-  llmService: any
+  llmService: any,
+  harnessContext: CLIContext
 ): Promise<
   Array<{
     id: string;
@@ -357,10 +385,17 @@ ${poiDetails}
 
 请为用户推荐最合适的地点。`;
 
-    const response = await client.call([
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage },
-    ]);
+    // 必须通过 Harness 执行 LLM 调用
+    const response = await harnessContext.llmWrapper.executeRecommendation(
+      'process_recommendations',
+      { systemPrompt, userMessage, pois: topPois },
+      async () => {
+        return client.call([
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ]);
+      }
+    );
 
     logger.debug('LLM 推荐处理响应', {
       content: response.content?.substring(0, 300),
@@ -370,19 +405,8 @@ ${poiDetails}
     const jsonMatch = response.content?.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
       logger.warn('无法解析 LLM 推荐响应');
-      // 回退：直接返回前 3 个 POI
-      return topPois.slice(0, 3).map((poi, idx) => ({
-        id: poi.id || `poi_${idx}`,
-        name: poi.name,
-        reason: `推荐的${searchParams.keywords}，用户评分较高`,
-        distance: poi.distance,
-        rating: poi.rating,
-        address: poi.address,
-        phone: poi.tel || poi.phone,
-        hours: poi.shopInfo?.openingHours,
-        reviewCount: poi.shopInfo?.reviewCount,
-        businessArea: poi.businessArea,
-      }));
+      // 如果解析失败，返回空数组并让用户重试
+      throw new Error('LLM 推荐响应格式无效，无法生成推荐');
     }
 
     const recommendations = JSON.parse(jsonMatch[0]);
@@ -405,19 +429,8 @@ ${poiDetails}
     }));
   } catch (error) {
     logger.error('LLM 推荐处理失败:', error);
-    // 回退：返回前 3 个 POI
-    return pois.slice(0, 3).map((poi, idx) => ({
-      id: poi.id || `poi_${idx}`,
-      name: poi.name,
-      reason: '推荐地点',
-      distance: poi.distance,
-      rating: poi.rating,
-      address: poi.address,
-      phone: poi.tel || poi.phone,
-      hours: poi.shopInfo?.openingHours,
-      reviewCount: poi.shopInfo?.reviewCount,
-      businessArea: poi.businessArea,
-    }));
+    // 失败时抛出异常，由调用者处理
+    throw error;
   }
 }
 

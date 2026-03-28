@@ -2,13 +2,35 @@ import { Command } from 'commander';
 import { env } from '@/config/env';
 import { createLogger } from '@/utils/logger';
 import { createTitleBox, color } from '@/utils/format';
+import { initializeHarness, LLMExecutorWrapper, MapExecutorWrapper } from '@/harness/index';
 import { recommendCommand } from './commands/recommend';
 import { helpCommand } from './commands/help';
 import { historyCommand } from './commands/history';
 
 const logger = createLogger('cli');
 
+export interface CLIContext {
+  harness: any;
+  llmWrapper: LLMExecutorWrapper;
+  mapWrapper: MapExecutorWrapper;
+}
+
 export async function createCLIApp(): Promise<Command> {
+  // 初始化 Harness
+  const harness = await initializeHarness();
+  const llmWrapper = new LLMExecutorWrapper(harness);
+  const mapWrapper = new MapExecutorWrapper(harness);
+  
+  const harnessContext: CLIContext = {
+    harness,
+    llmWrapper,
+    mapWrapper,
+  };
+
+  logger.debug('Harness 已初始化', {
+    sessionId: harness.getSessionId(),
+  });
+
   const program = new Command();
 
   program
@@ -26,7 +48,7 @@ export async function createCLIApp(): Promise<Command> {
     .option('-d, --distance <km>', '最大距离（公里）', '10')
     .option('-l, --location <location>', '起始位置或地址')
     .option('-i, --interactive', '进入交互模式', true)
-    .action(recommendCommand);
+    .action((options) => recommendCommand(options, harnessContext));
 
   // 辅助命令：查看历史
   program
@@ -51,7 +73,7 @@ export async function createCLIApp(): Promise<Command> {
           type: 'both',
           distance: '10',
           interactive: true,
-        });
+        }, harnessContext);
       }
     });
 
