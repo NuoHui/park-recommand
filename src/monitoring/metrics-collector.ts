@@ -13,7 +13,7 @@ import {
   MonitoringOptions,
 } from './types.js';
 
-const logger = getLogger('MetricsCollector');
+const logger = getLogger();
 
 export class MetricsCollector {
   private metrics: Map<string, MetricSample[]> = new Map();
@@ -80,9 +80,9 @@ export class MetricsCollector {
   recordCacheHit(hit: boolean, latency?: number): void {
     if (!this.options.enabled) return;
 
-    this.cacheAttempts++;
+    this.stats.cacheAttempts++;
     if (hit) {
-      this.cacheHits++;
+      this.stats.cacheHits++;
       this.recordMetric('cache:hit', 1);
       if (latency !== undefined) {
         this.recordMetric('cache:latency:hit', latency);
@@ -383,3 +383,6 @@ export function getMetricsCollector(options?: MonitoringOptions): MetricsCollect
 export function resetMetricsCollector(): void {
   globalCollector = null;
 }
+
+// Re-export types for convenience
+export type { PerformanceSnapshot, AlertConfig, AlertEvent, MonitoringOptions } from './types.js';

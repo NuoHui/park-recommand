@@ -177,27 +177,27 @@ export interface ILogger {
   /**
    * 记录错误日志
    */
-  error(message: string, options?: LogOptions): void;
+  error(message: string, options?: LogOptions | Record<string, any>): void;
 
   /**
    * 记录警告日志
    */
-  warn(message: string, options?: LogOptions): void;
+  warn(message: string, options?: LogOptions | Record<string, any>): void;
 
   /**
    * 记录信息日志
    */
-  info(message: string, options?: LogOptions): void;
+  info(message: string, options?: LogOptions | Record<string, any>): void;
 
   /**
    * 记录调试日志
    */
-  debug(message: string, options?: LogOptions): void;
+  debug(message: string, options?: LogOptions | Record<string, any>): void;
 
   /**
    * 记录详细日志
    */
-  verbose(message: string, options?: LogOptions): void;
+  verbose(message: string, options?: LogOptions | Record<string, any>): void;
 
   /**
    * 记录关键指标

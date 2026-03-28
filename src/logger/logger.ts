@@ -232,42 +232,42 @@ export class Logger implements ILogger {
   /**
    * 记录错误日志
    */
-  public error(message: string, options?: LogOptions): void {
-    this.logWithOptions('error', message, options);
+  public error(message: string, options?: LogOptions | Record<string, any>): void {
+    this.logWithOptions('error', message, options as LogOptions);
   }
 
   /**
    * 记录警告日志
    */
-  public warn(message: string, options?: LogOptions): void {
-    this.logWithOptions('warn', message, options);
+  public warn(message: string, options?: LogOptions | Record<string, any>): void {
+    this.logWithOptions('warn', message, options as LogOptions);
   }
 
   /**
    * 记录信息日志
    */
-  public info(message: string, options?: LogOptions): void {
-    this.logWithOptions('info', message, options);
+  public info(message: string, options?: LogOptions | Record<string, any>): void {
+    this.logWithOptions('info', message, options as LogOptions);
   }
 
   /**
    * 记录调试日志
    */
-  public debug(message: string, options?: LogOptions): void {
-    this.logWithOptions('debug', message, options);
+  public debug(message: string, options?: LogOptions | Record<string, any>): void {
+    this.logWithOptions('debug', message, options as LogOptions);
   }
 
   /**
    * 记录详细日志
    */
-  public verbose(message: string, options?: LogOptions): void {
-    this.logWithOptions('verbose', message, options);
+  public verbose(message: string, options?: LogOptions | Record<string, any>): void {
+    this.logWithOptions('verbose', message, options as LogOptions);
   }
 
   /**
    * 根据选项记录日志
    */
-  private logWithOptions(level: string, message: string, options?: LogOptions): void {
+  private logWithOptions(level: string, message: string, options?: LogOptions | Record<string, any>): void {
     const meta: any = {};
 
     if (options?.context) {
@@ -276,6 +276,9 @@ export class Logger implements ILogger {
 
     if (options?.data) {
       meta.data = options.data;
+    } else if (options && !('error' in options) && !('stack' in options) && !('context' in options)) {
+      // 如果 options 不是 LogOptions 的标准字段，将整个对象作为 data
+      meta.data = options;
     }
 
     if (options?.error) {

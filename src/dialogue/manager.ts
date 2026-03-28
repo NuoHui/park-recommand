@@ -334,7 +334,7 @@ export class DialogueManager {
       this.requestQueue.add({
         id: llmCheckRequestId,
         priority: RequestPriority.HIGH,
-        handler: async () => {
+        executor: async () => {
           const shouldRecommendResult = await llmEngine.shouldRecommend(preferences);
 
           if (!shouldRecommendResult.shouldRecommend) {
@@ -375,7 +375,7 @@ export class DialogueManager {
       this.requestQueue.add({
         id: mapQueryRequestId,
         priority: RequestPriority.HIGH,
-        handler: async () => {
+        executor: async () => {
           return await locationService.searchRecommendedLocations(preferences);
         },
       });

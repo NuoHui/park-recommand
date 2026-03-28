@@ -11,7 +11,7 @@ import { getRequestLogger } from '@/monitoring/request-logger';
 import { getMetricsCollector } from '@/monitoring/metrics-collector';
 import { getLogger } from '@/logger/index.js';
 
-const logger = getLogger('e2e:recommendation-flow');
+const logger = getLogger();
 
 interface E2ETestResult {
   testName: string;

@@ -7,7 +7,7 @@ import { getLogger } from '@/logger/index.js';
 import { getLocationService } from '@/map/service.js';
 import { CacheManager } from './manager.js';
 
-const logger = getLogger('CacheWarmer');
+const logger = getLogger();
 
 /** 热门景点列表 */
 const POPULAR_LOCATIONS = [
@@ -80,6 +80,10 @@ export interface CacheWarmerOptions {
   updateInterval?: number;
   /** 缓存过期时间（毫秒） */
   cacheTTL?: number;
+  /** 是否启用自动预热 */
+  enableAutoWarmup?: boolean;
+  /** 预热间隔（毫秒） */
+  warmupInterval?: number;
 }
 
 export class CacheWarmer {
@@ -91,6 +95,8 @@ export class CacheWarmer {
     enableOnStartup: true,
     updateInterval: 3600000, // 1 小时
     cacheTTL: 86400000, // 24 小时
+    enableAutoWarmup: false,
+    warmupInterval: 300000, // 5 分钟
   };
 
   constructor(options: CacheWarmerOptions = {}) {
@@ -161,26 +167,26 @@ export class CacheWarmer {
         const cacheKey = this.generateCacheKey(location);
 
         // 检查是否已缓存
-        const cached = cacheManager.get(cacheKey);
+        const cached = await cacheManager.get(cacheKey);
         if (cached) {
           logger.debug('位置已在缓存中', { location: location.name });
           continue;
         }
 
         // 搜索位置信息
-        const result = await locationService.search({
-          location,
-          keywords: location.name,
+        const result = await locationService.searchRecommendedLocations({
+          location: location.name,
+          parkType: location.type as any,
         });
 
-        if (result.success && result.locations) {
+        if (result && Array.isArray(result) && result.length > 0) {
           // 缓存结果
-          cacheManager.set(cacheKey, result.locations, this.options.cacheTTL);
+          await cacheManager.set(cacheKey, result, this.options.cacheTTL);
           warmed++;
 
           logger.debug('位置已缓存', {
             location: location.name,
-            count: result.locations.length,
+            count: result.length,
           });
         }
       } catch (error) {
@@ -260,16 +266,35 @@ export class CacheWarmer {
   }
 
   /**
+   * 预热热门位置（别名）
+   */
+  async warmupPopularLocations(): Promise<void> {
+    await this.warmCache();
+  }
+
+  /**
+   * 获取状态（别名）
+   */
+  getStatus(): { warmCount: number; lastWarmTime: number } {
+    const stats = this.getStats();
+    return {
+      warmCount: stats.warmCount,
+      lastWarmTime: stats.lastWarmTime,
+    };
+  }
+
+  /**
    * 清空预热缓存
    */
-  clearWarmedCache(): void {
+  async clearWarmedCache(): Promise<void> {
     const cacheManager = CacheManager.getInstance();
     let cleared = 0;
 
     for (const location of POPULAR_LOCATIONS) {
       const cacheKey = this.generateCacheKey(location);
-      if (cacheManager.get(cacheKey)) {
-        cacheManager.remove(cacheKey);
+      const cached = await cacheManager.get(cacheKey);
+      if (cached) {
+        await cacheManager.delete(cacheKey);
         cleared++;
       }
     }

@@ -1,6 +1,6 @@
 /**
- * 日志聚合器
- * 功能：收集所有日志数据，生成完整的诊断报告
+ * Log Aggregator
+ * Collects all log data and generates complete diagnostic reports
  */
 
 import { getLogger } from '@/logger/index.js';
@@ -54,7 +54,7 @@ export class LogAggregator {
   private readonly maxSnapshots = 100;
 
   /**
-   * 捕获当前状态快照
+   * Capture current state snapshot
    */
   captureSnapshot(sessionId: string): LogSnapshot {
     const errorTracker = getErrorTracker();
@@ -105,7 +105,7 @@ export class LogAggregator {
   }
 
   /**
-   * 生成诊断报告
+   * Generate diagnostic report
    */
   generateDiagnosticReport(sessionId: string): DiagnosticReport {
     const snapshot = this.captureSnapshot(sessionId);
@@ -114,7 +114,7 @@ export class LogAggregator {
     const summary = this.generateSummary(snapshot);
 
     return {
-      title: `诊断报告 - 会话 ${sessionId}`,
+      title: `Diagnostic Report - Session ${sessionId}`,
       summary,
       snapshot,
       recommendations,
@@ -123,78 +123,80 @@ export class LogAggregator {
   }
 
   /**
-   * 生成摘要
+   * Generate summary
    */
   private generateSummary(snapshot: LogSnapshot): string {
     const errorCount = snapshot.errors.total;
     const successRate = snapshot.performance.successRate;
     const cacheHitRate = snapshot.performance.cacheHitRate;
 
-    let status = '✅ 正常';
+    let status = 'OK';
     if (errorCount > 10 || successRate < 0.95) {
-      status = '⚠️ 警告';
+      status = 'WARNING';
     }
     if (errorCount > 20 || successRate < 0.9) {
-      status = '🔴 严重';
+      status = 'CRITICAL';
     }
 
-    return `${status} - 错误: ${errorCount}, 成功率: ${(successRate * 100).toFixed(2)}%, 缓存命中率: ${(cacheHitRate * 100).toFixed(2)}%`;
+    return `${status} - Errors: ${errorCount}, Success Rate: ${(successRate * 100).toFixed(2)}%, Cache Hit Rate: ${(cacheHitRate * 100).toFixed(2)}%`;
   }
 
   /**
-   * 分析数据并生成建议
+   * Analyze data and generate recommendations
    */
   private analyzeAndRecommend(snapshot: LogSnapshot): string[] {
     const recommendations: string[] = [];
 
-    // 错误分析
+    // Error analysis
     if (snapshot.errors.total > 10) {
-      recommendations.push('⚠️ 错误数量较多，建议检查错误日志进行排查');
+      recommendations.push('Too many errors, check error logs');
     }
 
     if (snapshot.errors.byCriteria['level:critical']) {
-      recommendations.push('🔴 存在严重错误，需要立即处理');
+      recommendations.push('Critical errors found, immediate action needed');
     }
 
-    // 性能分析
+    // Performance analysis
     if (snapshot.performance.p95Latency > 2000) {
-      recommendations.push('⏱️ P95 延迟较高，建议优化查询性能');
+      recommendations.push('High P95 latency, optimize query performance');
     }
 
     if (snapshot.performance.errorRate > 0.05) {
-      recommendations.push('❌ 错误率超过 5%，建议检查服务健康状况');
+      recommendations.push('Error rate above 5%, check service health');
     }
 
-    // 缓存分析
+    // Cache analysis
     if (snapshot.performance.cacheHitRate < 0.5) {
-      recommendations.push('💾 缓存命中率低于 50%，可能需要调整缓存策略');
+      recommendations.push('Cache hit rate below 50%, consider cache strategy adjustment');
     }
 
-    // 慢请求分析
+    // Slow request analysis
     if (snapshot.requests.slowRequests > 5) {
-      recommendations.push(`🐢 检测到 ${snapshot.requests.slowRequests} 个慢请求，建议优化');
+      recommendations.push(
+        `Detected ${snapshot.requests.slowRequests} slow requests, optimize performance`,
+      );
     }
 
-    // 成功率分析
+    // Success rate analysis
     if (snapshot.performance.successRate < 0.95) {
-      recommendations.push('📊 成功率低于 95%，需要改进稳定性');
+      recommendations.push('Success rate below 95%, improve stability');
     }
 
-    // 吞吐量分析
+    // Throughput analysis
     if (snapshot.performance.throughput < 1) {
-      recommendations.push('📈 吞吐量较低，可能存在瓶颈');
+      recommendations.push('Low throughput, potential bottleneck');
     }
 
-    // 如果没有问题
+    // No issues
     if (recommendations.length === 0) {
-      recommendations.push('✅ 系统运行正常，无需改进建议');
+      recommendations.push('System running normally, no improvement suggestions');
     }
 
     return recommendations;
   }
 
   /**
-   * 获取趋势分析
+   * Get trend analysis
    */
   getTrendAnalysis(): {
     latencyTrend: 'improving' | 'stable' | 'degrading';
@@ -234,7 +236,7 @@ export class LogAggregator {
   }
 
   /**
-   * 计算趋势（升、降、稳定）
+   * Calculate trend (up, down, stable)
    */
   private calculateTrend(values: number[]): 'up' | 'down' | 'stable' {
     if (values.length < 2) return 'stable';
@@ -242,35 +244,35 @@ export class LogAggregator {
     const first = values[0];
     const last = values[values.length - 1];
     const diff = last - first;
-    const threshold = Math.abs(first) * 0.1; // 10% 变化阈值
+    const threshold = Math.abs(first) * 0.1; // 10% change threshold
 
     if (Math.abs(diff) < threshold) return 'stable';
     return diff > 0 ? 'up' : 'down';
   }
 
   /**
-   * 导出完整诊断报告为文件
+   * Export complete diagnostic report as file
    */
   async exportReport(sessionId: string, outputDir: string = './reports'): Promise<string> {
     const report = this.generateDiagnosticReport(sessionId);
 
-    // 创建输出目录
+    // Create output directory
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    // 生成文件名
+    // Generate filename
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     const filename = `diagnostic-report-${sessionId}-${timestamp}.json`;
     const filepath = path.join(outputDir, filename);
 
-    // 序列化报告
+    // Serialize report
     const content = JSON.stringify(report, null, 2);
 
-    // 写入文件
+    // Write file
     fs.writeFileSync(filepath, content, 'utf-8');
 
-    logger.info('诊断报告已导出', {
+    logger.info('Diagnostic report exported', {
       data: { filepath },
     });
 
@@ -278,69 +280,62 @@ export class LogAggregator {
   }
 
   /**
-   * 生成完整的测试报告
+   * Generate complete test report
    */
   generateFullReport(): string {
     const errorTracker = getErrorTracker();
     const requestLogger = getRequestLogger();
     const metricsCollector = getMetricsCollector();
 
-    let report = `
-╔════════════════════════════════════════════════════════════════════════════╗
-║                                                                            ║
-║                        完整日志和诊断报告                                  ║
-║                                                                            ║
-╚════════════════════════════════════════════════════════════════════════════╝
+    const timestamp = new Date().toISOString();
+    const totalSnapshots = this.snapshots.length;
+    const latestSnapshot =
+      totalSnapshots > 0 ? new Date(this.snapshots[totalSnapshots - 1].timestamp).toISOString() : 'N/A';
 
-⏰ 生成时间: ${new Date().toISOString()}
+    let report = '=== Complete Logs and Diagnostic Report ===\n\n';
+    report += `Time: ${timestamp}\n\n`;
+    report += 'Snapshots:\n';
+    report += `- Total: ${totalSnapshots}\n`;
+    report += `- Latest: ${latestSnapshot}\n\n`;
 
-📋 快照统计
-├─ 总快照数: ${this.snapshots.length}
-└─ 最新快照时间: ${this.snapshots.length > 0 ? new Date(this.snapshots[this.snapshots.length - 1].timestamp).toISOString() : 'N/A'}
-
-`;
-
-    // 添加各个报告
+    // Add reports
     report += errorTracker.getReport();
     report += '\n\n';
     report += requestLogger.getPerformanceReport();
     report += '\n\n';
     report += metricsCollector.getReport();
 
-    // 添加趋势分析
+    // Add trend analysis
     const trend = this.getTrendAnalysis();
-    report += `
-
-📈 趋势分析
-├─ 延迟趋势: ${trend.latencyTrend}
-├─ 错误趋势: ${trend.errorTrend}
-└─ 缓存趋势: ${trend.cacheTrend}
-
-═══════════════════════════════════════════════════════════════════════════`;
+    report += '\n\nTrend Analysis:\n';
+    report += `- Latency: ${trend.latencyTrend}\n`;
+    report += `- Errors: ${trend.errorTrend}\n`;
+    report += `- Cache: ${trend.cacheTrend}\n`;
+    report += '\n===================================================';
 
     return report;
   }
 
   /**
-   * 获取所有快照
+   * Get all snapshots
    */
   getSnapshots(): LogSnapshot[] {
     return [...this.snapshots];
   }
 
   /**
-   * 清空快照
+   * Clear snapshots
    */
   clear(): void {
     this.snapshots = [];
   }
 }
 
-// 全局实例
+// Global instance
 let globalAggregator: LogAggregator | null = null;
 
 /**
- * 获取全局日志聚合器
+ * Get global log aggregator
  */
 export function getLogAggregator(): LogAggregator {
   if (!globalAggregator) {
@@ -350,7 +345,7 @@ export function getLogAggregator(): LogAggregator {
 }
 
 /**
- * 重置全局实例（用于测试）
+ * Reset global instance (for testing)
  */
 export function resetLogAggregator(): void {
   globalAggregator = null;

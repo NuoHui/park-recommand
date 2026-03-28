@@ -13,7 +13,7 @@ import { getLogger } from '@/logger/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const logger = getLogger('test-report-generator');
+const logger = getLogger();
 
 interface TestReportData {
   summary: string;

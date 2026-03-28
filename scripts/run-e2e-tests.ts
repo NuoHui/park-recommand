@@ -13,7 +13,7 @@ import { getRequestLogger } from '@/monitoring/request-logger.js';
 import { getMetricsCollector } from '@/monitoring/metrics-collector.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const logger = getLogger('e2e-runner');
+const logger = getLogger();
 
 /**
  * 主入口

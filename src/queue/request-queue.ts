@@ -16,7 +16,7 @@ import {
   QueueOptions,
 } from './types.js';
 
-const logger = getLogger('RequestQueue');
+const logger = getLogger();
 
 export class RequestQueue {
   private queue: QueuedRequest[] = [];
@@ -405,6 +405,30 @@ export class RequestQueue {
    */
   getPendingCount(): number {
     return this.queue.length;
+  }
+
+  /**
+   * 获取请求状态
+   */
+  getRequestStatus(requestId: string): RequestStatus | undefined {
+    const request = this.queue.find((r) => r.id === requestId);
+    return request?.status;
+  }
+
+  /**
+   * 获取请求结果
+   */
+  getRequestResult(requestId: string): any {
+    const request = this.queue.find((r) => r.id === requestId);
+    return request?.result;
+  }
+
+  /**
+   * 获取请求错误
+   */
+  getRequestError(requestId: string): Error | string | undefined {
+    const request = this.queue.find((r) => r.id === requestId);
+    return request?.error ? (request.error instanceof Error ? request.error.message : request.error) : undefined;
   }
 }
 

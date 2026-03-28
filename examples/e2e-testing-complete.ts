@@ -10,7 +10,7 @@ import { getMetricsCollector } from '@/monitoring/metrics-collector';
 import { getLogAggregator } from '@/monitoring/log-aggregator';
 import { getLogger } from '@/logger/index.js';
 
-const logger = getLogger('example:e2e-testing');
+const logger = getLogger();
 
 /**
  * 示例 1: 基本流程测试
