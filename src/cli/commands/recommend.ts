@@ -94,6 +94,7 @@ async function newRecommendFlow(): Promise<void> {
     });
 
     let searchParams: MapSearchParams | null = null;
+    let finalParams: Partial<ExtractedParams> = extractedParams;
 
     // 第三步：参数验证和补充（循环追问直到参数齐全）
     if (!extractedParams.extracted) {
@@ -129,10 +130,23 @@ async function newRecommendFlow(): Promise<void> {
               Array.from(askedFields)
             );
 
-            // 合并提取结果
+            // ⭐ 完整合并提取结果，保留所有多层级地址信息
             currentParams = {
               keywords: updatedParams.keywords ?? currentParams.keywords,
+              country: updatedParams.country ?? currentParams.country,
+              province: updatedParams.province ?? currentParams.province,
+              city: updatedParams.city ?? currentParams.city,
+              district: updatedParams.district ?? currentParams.district,
+              street: updatedParams.street ?? currentParams.street,
+              community: updatedParams.community ?? currentParams.community,
+              building: updatedParams.building ?? currentParams.building,
+              houseNumber: updatedParams.houseNumber ?? currentParams.houseNumber,
+              detailedAddress: updatedParams.detailedAddress ?? currentParams.detailedAddress,
               region: updatedParams.region ?? currentParams.region,
+              types: updatedParams.types ?? currentParams.types,
+              latitude: updatedParams.latitude ?? currentParams.latitude,
+              longitude: updatedParams.longitude ?? currentParams.longitude,
+              adcode: updatedParams.adcode ?? currentParams.adcode,
             };
 
             // 记录已追问的字段
@@ -168,13 +182,12 @@ async function newRecommendFlow(): Promise<void> {
         }
       }
 
-      searchParams = extractor.toMapSearchParams(
-        { ...extractedParams, ...currentParams },
-        10,
-        1
-      );
+      // 保存最终合并的参数
+      finalParams = { ...extractedParams, ...currentParams };
+      searchParams = extractor.toMapSearchParams(finalParams as ExtractedParams, 10, 1);
     } else {
       // 参数完整，直接转换
+      finalParams = extractedParams;
       searchParams = extractor.toMapSearchParams(extractedParams, 10, 1);
     }
 
@@ -184,8 +197,20 @@ async function newRecommendFlow(): Promise<void> {
       return;
     }
 
+    // 构建多层级地址显示
+    const addressLevels: string[] = [];
+    if (finalParams.country) addressLevels.push(finalParams.country);
+    if (finalParams.province) addressLevels.push(finalParams.province);
+    if (finalParams.city) addressLevels.push(finalParams.city);
+    if (finalParams.district) addressLevels.push(finalParams.district);
+    if (finalParams.street) addressLevels.push(finalParams.street);
+    if (finalParams.community) addressLevels.push(finalParams.community);
+    if (finalParams.building) addressLevels.push(finalParams.building);
+    if (finalParams.houseNumber) addressLevels.push(finalParams.houseNumber);
+
+    const formattedAddress = addressLevels.length > 0 ? addressLevels.join(' > ') : searchParams.region;
     console.log(
-      color.success(`[✓] 好的！我来为你搜索 ${color.primary(searchParams.region)} 附近的 ${color.primary(searchParams.keywords)}`)
+      color.success(`[✓] 好的！我来为你搜索 ${color.primary(formattedAddress)} 附近的 ${color.primary(searchParams.keywords)}`)
     );
     console.log('');
 
@@ -371,11 +396,11 @@ ${poiDetails}
       name: rec.name,
       reason: rec.reason,
       distance: topPois[idx]?.distance,
-      rating: rec.rating || topPois[idx]?.rating,
+      rating: rec.rating ? Number(rec.rating) : topPois[idx]?.rating,
       address: topPois[idx]?.address,
       phone: rec.phone || topPois[idx]?.tel || topPois[idx]?.phone,
       hours: rec.hours || topPois[idx]?.shopInfo?.openingHours,
-      reviewCount: rec.reviewCount || topPois[idx]?.shopInfo?.reviewCount,
+      reviewCount: rec.reviewCount ? Number(rec.reviewCount) : topPois[idx]?.shopInfo?.reviewCount,
       businessArea: rec.businessArea || topPois[idx]?.businessArea,
     }));
   } catch (error) {
@@ -439,13 +464,16 @@ function displayRecommendations(
     
     // 评分和评价信息
     if (rec.rating) {
-      const fullStars = Math.floor(rec.rating);
-      const halfStar = rec.rating % 1 >= 0.5 ? 1 : 0;
-      const emptyStars = 5 - fullStars - halfStar;
-      const starDisplay = '★'.repeat(fullStars) + (halfStar ? '✪' : '') + '☆'.repeat(emptyStars);
-      console.log(
-        `  ⭐ 评分: ${starDisplay} ${rec.rating.toFixed(1)}/5.0${rec.reviewCount ? ` (${rec.reviewCount}条评价)` : ''}`
-      );
+      const ratingNum = typeof rec.rating === 'string' ? parseFloat(rec.rating) : rec.rating;
+      if (!isNaN(ratingNum)) {
+        const fullStars = Math.floor(ratingNum);
+        const halfStar = ratingNum % 1 >= 0.5 ? 1 : 0;
+        const emptyStars = 5 - fullStars - halfStar;
+        const starDisplay = '★'.repeat(fullStars) + (halfStar ? '✪' : '') + '☆'.repeat(emptyStars);
+        console.log(
+          `  ⭐ 评分: ${starDisplay} ${ratingNum.toFixed(1)}/5.0${rec.reviewCount ? ` (${rec.reviewCount}条评价)` : ''}`
+        );
+      }
     }
     
     // 营业时间
