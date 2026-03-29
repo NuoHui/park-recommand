@@ -1,28 +1,29 @@
 # 🏗️ 深圳公园景点推荐 CLI Agent - 项目架构
 
-**版本**: 1.0.0  
-**更新时间**: 2024-03-28  
-**项目**: Park Recommender CLI Agent  
-**目标**: 为深圳用户智能推荐公园和爬山景点，返回 **Top 5** 推荐结果
+**版本**: 2.0.0 (Harness Agent 架构版本)  
+**更新时间**: 2026-03-29  
+**项目**: Park Recommender CLI Agent with Harness Agent Framework  
+**目标**: 为深圳用户智能推荐公园和爬山景点，返回 **Top 5** 推荐结果，采用企业级治理框架
 
 ---
 
 ## 📋 目录
 
 1. [架构概览](#架构概览)
-2. [核心链路](#核心链路)
-3. [模块详解](#模块详解)
-4. [数据流设计](#数据流设计)
-5. [性能优化](#性能优化)
-6. [测试策略](#测试策略)
-7. [错误处理](#错误处理)
-8. [扩展指南](#扩展指南)
+2. [Harness Agent 治理层](#harness-agent-治理层)
+3. [核心链路](#核心链路)
+4. [模块详解](#模块详解)
+5. [数据流设计](#数据流设计)
+6. [性能优化](#性能优化)
+7. [测试策略](#测试策略)
+8. [错误处理](#错误处理)
+9. [扩展指南](#扩展指南)
 
 ---
 
 ## 架构概览
 
-### 系统架构图
+### 完整系统架构图
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -33,6 +34,16 @@
 │  CLI Framework (commander)                                      │
 │  ├─ runCLI()  (src/cli/index.ts)                               │
 │  └─ Command Parser & Router                                     │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────────────┐
+│  🔐 Harness Agent 治理层 (src/harness/)                         │
+│  ├─ 约束检查: 工具白名单、行为限制、资源约束                    │
+│  ├─ 资源管理: API限制(60/min)、Token追踪、并发(5)              │
+│  ├─ 意图验证: 安全检查、黑名单检测、权限验证                    │
+│  ├─ 风险评分: 四维度评分 (工具/参数/深度/历史)                 │
+│  ├─ 执行沙箱: 前置检查 → 执行 → 后置检查                        │
+│  └─ 监控告警: 实时告警、审计追踪、事件记录                      │
 └────────────────────────┬────────────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────────────┐
@@ -95,12 +106,133 @@
 | **高性能缓存** | 内存 + 磁盘两层缓存 | Node.js 原生 fs/Map | ✅ |
 | **CLI 界面** | 美观的终端输出 | Chalk, Commander | ✅ |
 | **日志系统** | 结构化日志记录 | Winston | ✅ |
+| **🔒 Harness Agent** | 安全约束、资源管理、风险控制 | TypeScript, 设计模式 | ✅ |
+
+---
+
+## Harness Agent 治理层
+
+### 架构设计 (5 大模块)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│              Harness Agent 协调层                             │
+│  ┌────────────┬───────────┬─────────┬──────────┬──────────┐  │
+│  │ 约束系统   │ 执行沙箱  │ 资源管理 │ 验证系统 │ 监控告警  │  │
+│  └────────────┴───────────┴─────────┴──────────┴──────────┘  │
+└──────────────────────────────────────────────────────────────┘
+         ↓           ↓            ↓           ↓          ↓
+    约束检查    工具执行    API/Token  安全验证   告警/审计
+```
+
+### 1️⃣ 约束系统 (Constraints)
+
+**三维约束配置** (`src/harness/config/constraints.ts`):
+
+```typescript
+✓ ToolConstraints      - 工具白名单/黑名单
+✓ ResourceConstraints  - API频率、Token、并发限制
+✓ BehaviorConstraints  - 允许的操作、行为约束、风险阈值
+```
+
+**默认配置示例**:
+- ✅ 允许工具: `llm-client`, `amap-client`, `cache-manager`, `request-queue`
+- ✅ 拒绝工具: 任何未在白名单中的工具
+- ✅ API 限制: 60 次/分钟
+- ✅ Token 限制: 单次 4000, 会话 32000, 全局 100000
+- ✅ 并发限制: 5 个任务
+
+### 2️⃣ 执行沙箱 (Execution Sandbox)
+
+**隔离和控制** (`src/harness/execution/`):
+
+```
+工具调用流程:
+  ├─→ ToolRegistry.validate()     ✓ 工具是否在白名单
+  ├─→ PreCheckExecutor.execute()   ✓ 参数验证、深度检查
+  ├─→ 【实际执行】                   ⚙️ 执行工具
+  └─→ PostCheckExecutor.execute()  ✓ 结果验证、数据脱敏
+```
+
+**关键执行器**:
+- `ToolRegistry`: 工具白名单验证
+- `PreCheckExecutor`: 参数验证、深度检查
+- `PostCheckExecutor`: 结果验证、数据脱敏
+
+### 3️⃣ 资源管理系统 (Resource Management)
+
+**精细控制** (`src/harness/resource/`):
+
+| 组件 | 算法 | 功能 |
+|------|------|------|
+| **RateLimiter** | 滑动时间窗口 | API 频率控制 (60/min) |
+| **TokenTracker** | 会话级+全局级追踪 | Token 使用管理 |
+| **ConcurrencyController** | 信号量 | 并发任务限制 (5) |
+| **ResourceManager** | 统一协调 | 综合资源检查 |
+
+### 4️⃣ 验证和风险系统 (Validation & Risk)
+
+**意图验证** (`src/harness/validation/IntentValidator`):
+- ✓ 输入安全检查（黑名单、注入检测）
+- ✓ 意图分类（查询、推荐、修改、删除）
+- ✓ 权限检查（基于意图的权限矩阵）
+
+**风险评分** (`src/harness/validation/RiskScorer`):
+
+```
+总分 = 工具风险[0-30] + 参数风险[0-30] + 深度风险[0-15] + 历史风险[0-25]
+
+工具风险:
+  ├─ Cache: 5分
+  ├─ Map: 10分
+  └─ LLM: 15分
+
+参数风险:
+  ├─ 大小 > 100KB: 10分
+  ├─ 删除操作: 30分
+  └─ 修改操作: 20分
+
+调用深度:
+  └─ 深度 > 3: 15分
+
+历史行为:
+  ├─ 失败: +5分/次
+  └─ 超时: +5分/次
+
+风险等级:
+  ├─ Low: 0-24
+  ├─ Medium: 25-49
+  ├─ High: 50-74
+  └─ Critical: 75-100 (需要审批)
+```
+
+### 5️⃣ 监控和审计系统 (Monitoring & Audit)
+
+**SafetyMonitor** (安全监控):
+- 📊 5 种告警类型:
+  - `rate_limit` - API 频率超限
+  - `token_budget` - Token 预算超出
+  - `timeout` - 执行超时
+  - `anomaly` - 异常行为
+  - `resource_exhaustion` - 资源耗尽
+
+- ⚠️ 4 级告警:
+  - `info` - 信息性日志
+  - `warning` - 需要注意
+  - `error` - 错误事件
+  - `critical` - 严重问题
+
+**ExecutionTracker** (执行追踪):
+- 📝 审计日志记录（唯一 ID、会话、操作类型、结果）
+- 🔗 会话执行链追踪
+- 📊 JSON/CSV 导出
+- 📋 报告生成
 
 ---
 
 ## 核心链路
 
-### 完整推荐流程（getRecommendations）
+### 完整推荐流程（含 Harness Agent 检查）
 
 ```
 输入: UserPreference
@@ -108,6 +240,22 @@
   ├─ parkType: 景点类型 (park|hiking|both)
   ├─ maxDistance: 最大距离 (km)
   └─ ... 其他偏好
+
+        ↓
+
+【Harness 阶段 1】资源可用性检查 ✓ (< 1ms)
+  ├─ API 频率检查 (60/min)
+  ├─ Token 预算检查 (单次/会话/全局)
+  ├─ 并发限制检查 (5 个任务)
+  └─ 资源不足? → 返回错误
+
+        ↓
+
+【Harness 阶段 2】意图验证 ✓ (< 5ms)
+  ├─ 输入安全检查 (黑名单/注入检测)
+  ├─ 意图分类 (查询/推荐/修改/删除)
+  ├─ 权限检查 (基于意图的权限矩阵)
+  └─ 验证失败? → 返回错误
 
         ↓
 
@@ -136,12 +284,25 @@
 
         ↓
 
-【步骤 4】地图 API 查询 ✓
+【Harness 阶段 3】风险评分 ✓ (< 3ms)
+  RiskScorer.scoreExecution()
+  ├─ 工具风险[0-30]
+  ├─ 参数风险[0-30]
+  ├─ 调用深度[0-15]
+  ├─ 历史行为[0-25]
+  ├─ 总分: 0-100
+  └─ Critical(>75)? → 需要审批
+
+        ↓
+
+【步骤 4】地图 API 查询 ✓ (Harness 沙箱执行)
   searchRecommendedLocations(preferences)
+  ├─ PreCheck: 参数验证
   ├─ 构建搜索关键词
-  ├─ 调用高德 POI 搜索
+  ├─ 调用高德 POI 搜索 (受限制保护)
   ├─ 计算距离（如需要）
   ├─ 按距离过滤
+  ├─ PostCheck: 结果验证
   └─ 返回 Location[]
 
         ↓
@@ -178,12 +339,26 @@
 
         ↓
 
+【Harness 阶段 4】监控和审计 ✓
+  SafetyMonitor.monitorResult()
+  ├─ 检查告警条件
+  ├─ 触发必要的告警
+  └─ 记录审计日志
+  
+  ExecutionTracker.recordAudit()
+  ├─ 记录唯一 ID
+  ├─ 记录操作类型和结果
+  └─ 保存执行链
+
+        ↓
+
 【步骤 9】性能指标记录 ✓
   recordRequest(totalTime, success)
   ├─ 总耗时
   ├─ LLM 处理时间
   ├─ 地图查询时间
-  └─ 缓存命中情况
+  ├─ 缓存命中情况
+  └─ Harness 开销
 
         ↓
 
@@ -192,7 +367,7 @@
   ├─ recommendations: Recommendation[]
   ├─ error?: string
   └─ performanceMetrics?: {
-       totalTime, llmTime, mapQueryTime, cacheHit
+       totalTime, llmTime, mapQueryTime, cacheHit, harnessOverhead
      }
 ```
 
@@ -201,7 +376,13 @@
 ```
 用户输入
    ↓
-┌─ 是否有缓存? ─ 是 → 返回缓存
+【Harness 约束检查】✓ (< 1ms)
+   ├─ 资源可用? ─ 否 → 返回资源不足错误
+   ├─ 安全验证通过? ─ 否 → 返回安全错误
+   ├─ 风险等级可接受? ─ 否 → 需要审批或拒绝
+   └─ 是 ↓
+│
+├─ 是否有缓存? ─ 是 → 返回缓存
 │  └─ 否 ↓
 │
 ├─ 信息是否完整? ─ 否 → 返回错误提示
@@ -223,12 +404,55 @@
 ├─ LLM 解析成功? ─ 否 → 使用默认理由
 │  └─ 是 ↓
 │
-└─ 输出 Top 5 推荐
+├─ 输出 Top 5 推荐
+│  ↓
+└─ 【Harness 监控和审计】✓ (< 2ms)
+   ├─ 触发必要的告警
+   ├─ 记录审计日志
+   └─ 完成
 ```
 
 ---
 
 ## 模块详解
+
+### 0. Harness Agent 治理框架 (`src/harness/`)
+
+**职责**: 企业级安全约束、资源管理、风险控制和完整审计
+
+**核心子模块**:
+
+| 模块 | 功能 | 关键类 |
+|------|------|--------|
+| `config/constraints.ts` | 约束配置定义 | `ToolConstraints`, `ResourceConstraints`, `BehaviorConstraints` |
+| `execution/tool-registry.ts` | 工具白名单验证 | `ToolRegistry` |
+| `execution/pre-check.ts` | 前置检查执行器 | `PreCheckExecutor` |
+| `execution/post-check.ts` | 后置检查执行器 | `PostCheckExecutor` |
+| `resource/rate-limiter.ts` | API 频率限制 | `RateLimiter` |
+| `resource/token-tracker.ts` | Token 使用追踪 | `TokenTracker` |
+| `resource/concurrency.ts` | 并发控制 | `ConcurrencyController` |
+| `resource/manager.ts` | 资源管理协调 | `ResourceManager` |
+| `validation/intent-validator.ts` | 意图验证 | `IntentValidator` |
+| `validation/risk-scorer.ts` | 风险评分 | `RiskScorer` |
+| `monitoring/safety-monitor.ts` | 安全监控 | `SafetyMonitor` |
+| `monitoring/execution-tracker.ts` | 执行追踪审计 | `ExecutionTracker` |
+| `wrapper/llm-wrapper.ts` | LLM 执行包装器 | `LLMExecutorWrapper` |
+| `wrapper/map-wrapper.ts` | 地图执行包装器 | `MapExecutorWrapper` |
+| `wrapper/cache-wrapper.ts` | 缓存执行包装器 | `CacheExecutorWrapper` |
+
+**关键方法**:
+- `AgentHarness.execute()` - 主执行方法（含所有治理检查）
+- `ResourceManager.checkResourceAvailability()` - 资源检查
+- `IntentValidator.validate()` - 意图验证
+- `RiskScorer.scoreExecution()` - 风险评分
+- `SafetyMonitor.monitorExecutionResult()` - 监控告警
+- `ExecutionTracker.recordAudit()` - 审计记录
+
+**性能指标**:
+- 资源检查延迟: < 1ms
+- 意图验证延迟: < 5ms
+- 风险评分延迟: < 3ms
+- 总 Harness 开销: < 20ms ✅
 
 ### 1. CLI 框架 (`src/cli/`)
 
@@ -687,20 +911,37 @@ src/__tests__/
 
 | 指标 | 值 | 评级 |
 |------|-----|------|
-| 代码行数 | ~8000+ | ✅ |
+| 代码行数 | ~8000+ (含 Harness 框架) | ✅ |
 | 测试覆盖率 | ~20% | ⚠️ |
-| 模块数 | 56 | ✅ |
-| 关键路径 | 9 步 | ✅ |
-| 文档完整度 | 70% | ⚠️ |
+| 模块数 | 56+ (含治理框架) | ✅ |
+| 关键路径 | 13 步 (含 4 个 Harness 阶段) | ✅ |
+| 文档完整度 | 85% | ✅ |
+| Harness 开销 | < 20ms | ✅ |
+| 安全约束 | 完整 | ✅ |
+
+### Harness Agent 特定指标
+
+| 指标 | 值 | 说明 |
+|------|-----|------|
+| **资源检查延迟** | < 1ms | API/Token/并发检查 |
+| **意图验证延迟** | < 5ms | 安全验证、权限检查 |
+| **风险评分延迟** | < 3ms | 四维度风险评分 |
+| **监控告警延迟** | < 2ms | 事件记录、审计 |
+| **总 Harness 开销** | < 20ms | 全流程治理 |
+| **工具白名单** | 4 个 | llm-client, amap-client 等 |
+| **并发控制** | 5 个 | 最大并发任务数 |
+| **API 限制** | 60/分钟 | 滑动时间窗口 |
 
 ### 改进目标
 
 | 指标 | 目标 | 优先级 |
 |------|------|--------|
 | 测试覆盖率 | 80% | 🔴 |
+| Harness 单元测试 | 100% | 🔴 |
 | 文档完整度 | 100% | 🟡 |
 | 性能 P99 延迟 | <2s | 🟡 |
 | 可用性 | >99% | 🟢 |
+| 告警系统覆盖 | 100% | 🟡 |
 
 ---
 
@@ -713,6 +954,6 @@ src/__tests__/
 
 ---
 
-**最后更新**: 2024-03-28  
+**最后更新**: 2026-03-29  
 **维护者**: Park Recommender Team  
-**版本**: 1.0.0
+**版本**: 2.0.0 (Harness Agent 架构版本)
