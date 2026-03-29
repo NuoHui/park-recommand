@@ -40,7 +40,6 @@ export {
 // 导出集成包装器
 export { LLMExecutorWrapper } from './integration/llm-executor-wrapper';
 export { MapExecutorWrapper } from './integration/map-executor-wrapper';
-export { CacheExecutorWrapper } from './integration/cache-executor-wrapper';
 
 /**
  * 快速初始化 Harness
@@ -82,13 +81,12 @@ export async function initializeHarness() {
 
 /**
  * 创建带有集成包装器的 Harness
- * 返回包含 LLM、地图、缓存包装器的对象
+ * 返回包含 LLM、地图包装器的对象
  */
 export async function createHarnessWithWrappers() {
   const { getGlobalHarness } = await import('./agent-harness.js');
   const { LLMExecutorWrapper } = await import('./integration/llm-executor-wrapper.js');
   const { MapExecutorWrapper } = await import('./integration/map-executor-wrapper.js');
-  const { CacheExecutorWrapper } = await import('./integration/cache-executor-wrapper.js');
   
   const harness = getGlobalHarness();
 
@@ -96,6 +94,5 @@ export async function createHarnessWithWrappers() {
     harness,
     llm: new LLMExecutorWrapper(harness),
     map: new MapExecutorWrapper(harness),
-    cache: new CacheExecutorWrapper(harness),
   };
 }

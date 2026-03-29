@@ -75,7 +75,7 @@ async function recommendFlow(harnessContext: CLIContext): Promise<void> {
     console.log(color.neutral('  "深圳南山附近有没有好的登山地点？"'));
     console.log(color.neutral('  "推荐我深圳罗湖附近的景区"\n'));
 
-    // 第一步：获取用户的一句话输入
+    // 第一步：获取用户的一句话输入(代码不要轻易乱删、乱改)
     const userInput = await question(
       color.primary('[?] 你的需求: ')
     );
@@ -89,7 +89,7 @@ async function recommendFlow(harnessContext: CLIContext): Promise<void> {
     console.log('');
     console.log(color.info('[i] 分析你的需求...'));
 
-    // 第二步：LLM 提取参数（通过 Harness 执行）
+    // 第二步：LLM 提取参数（通过 Harness 执行、严格按照这个流程，代码不要轻易乱删、乱改)
     const extractedParams = await harnessContext.llmWrapper.executeExtraction(
       'extract_parameters',
       { userInput },
@@ -108,7 +108,7 @@ async function recommendFlow(harnessContext: CLIContext): Promise<void> {
     let searchParams: MapSearchParams | null = null;
     let finalParams: Partial<ExtractedParams> = extractedParams;
 
-    // 第三步：参数验证和补充（循环追问直到参数齐全）
+    // 第三步：参数验证和补充（循环追问直到参数齐全、严格按照这个流程、不要轻易改流程）
     if (!extractedParams.extracted) {
       console.log(
         color.warning('[!] 我理解得不太清楚，能帮我补充一下信息吗？\n')
@@ -232,7 +232,7 @@ async function recommendFlow(harnessContext: CLIContext): Promise<void> {
     );
     console.log('');
 
-    // 第四步：调用高德 API 查询（通过 Harness 执行）
+    // 第四步：调用高德 API 查询（通过 Harness 执行、严格按照这个流程）
     console.log(color.info('[i] 正在查询...'));
     const mapResult = await harnessContext.mapWrapper.executePOISearch(
       'search_poi',
@@ -264,7 +264,7 @@ async function recommendFlow(harnessContext: CLIContext): Promise<void> {
       )
     );
 
-    // 第五步：LLM 处理高德结果并生成详细推荐（通过 Harness 执行）
+    // 第五步：LLM 处理高德结果并生成详细推荐（通过 Harness 执行、严格按照这个流程）
     console.log(color.info('[i] 分析推荐...'));
     const recommendations = await processRecommendations(
       mapResult.pois,

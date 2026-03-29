@@ -3,10 +3,7 @@ import { CacheEntry } from '@/types/common';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
-import { Deduplicator } from './deduplicator';
-import { ExpirationManager, DEFAULT_CACHE_POLICIES } from './expiration';
 import { CacheCategory, CacheStats, CacheStatsResult, CleanupResult } from './types';
-import { Location, Recommendation } from '@/types/common';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -18,14 +15,12 @@ export class CacheManager {
   private static instance: CacheManager;
   private cacheDir: string;
   private memoryCache: Map<string, CacheEntry<any>>;
-  private expirationManager: ExpirationManager;
   private stats: Map<CacheCategory, CacheStats>;
   private initialized: boolean = false;
 
   private constructor() {
     this.cacheDir = path.join(__dirname, '../../.cache');
     this.memoryCache = new Map();
-    this.expirationManager = new ExpirationManager();
     this.stats = new Map();
     this.initializeCacheDir();
     this.initializeStats();
@@ -87,7 +82,8 @@ export class CacheManager {
     }
 
     const cat = category || CacheCategory.SESSION;
-    const ttl = expirationSeconds || this.expirationManager.getTTL(cat);
+    // 默认 TTL: 1 小时
+    const ttl = expirationSeconds || 3600;
     const now = Date.now();
 
     const entry: CacheEntry<T> = {
@@ -206,61 +202,7 @@ export class CacheManager {
     }
   }
 
-  /**
-   * 批量设置缓存（带去重）
-   */
-  async setLocations(
-    locations: Location[],
-    keyPrefix: string = 'locations'
-  ): Promise<void> {
-    // 去重
-    const deduped = Deduplicator.deduplicateLocations(locations);
-    const merged = Deduplicator.mergeLocations(deduped);
 
-    const key = `${keyPrefix}:${Date.now()}`;
-    await this.set(
-      key,
-      merged,
-      DEFAULT_CACHE_POLICIES[CacheCategory.LOCATION],
-      CacheCategory.LOCATION
-    );
-  }
-
-  /**
-   * 批量获取地点（支持模糊查询）
-   */
-  async getLocations(pattern?: string): Promise<Location[]> {
-    const locations: Location[] = [];
-
-    for (const [key, entry] of this.memoryCache) {
-      if (pattern && !key.includes(pattern)) continue;
-      if (!this.expirationManager.isExpired(entry)) {
-        const value = entry.value as any;
-        if (Array.isArray(value)) {
-          locations.push(...value);
-        }
-      }
-    }
-
-    return Deduplicator.deduplicateLocations(locations);
-  }
-
-  /**
-   * 缓存推荐结果（带去重）
-   */
-  async setRecommendations(
-    recommendations: Recommendation[],
-    keyPrefix: string = 'recommendations'
-  ): Promise<void> {
-    const deduped = Deduplicator.deduplicateRecommendations(recommendations);
-    const key = `${keyPrefix}:${Date.now()}`;
-    await this.set(
-      key,
-      deduped,
-      DEFAULT_CACHE_POLICIES[CacheCategory.RECOMMENDATION],
-      CacheCategory.RECOMMENDATION
-    );
-  }
 
   /**
    * 获取统计信息
@@ -304,7 +246,7 @@ export class CacheManager {
     const now = Date.now();
 
     for (const [key, entry] of entries) {
-      if (this.expirationManager.isExpired(entry)) {
+      if (entry.expiresAt < now) {
         freedSize += JSON.stringify(entry).length;
         await this.delete(key);
         deletedCount++;
@@ -336,9 +278,6 @@ export class CacheManager {
    */
   generateReport(): string {
     const stats = this.getStats();
-    const entries = Array.from(this.memoryCache.values());
-
-    const expireStats = this.expirationManager.getStats(entries);
 
     let report = `
 ╔═════════════════════════════════════╗
@@ -366,11 +305,6 @@ ${Object.entries(stats.byCategory)
     • 大小: ${this.formatBytes(stat.totalSize)}`
   )
   .join('\n')}
-
-过期情况:
-  • 有效: ${expireStats.valid} 项
-  • 即将过期: ${expireStats.aboutToExpire} 项
-  • 平均剩余: ${this.formatDuration(expireStats.avgRemainingTime)}
     `.trim();
 
     return report;
@@ -437,15 +371,4 @@ ${Object.entries(stats.byCategory)
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   }
 
-  /**
-   * 格式化时间
-   */
-  private formatDuration(ms: number): string {
-    if (ms < 0) return '已过期';
-    if (ms < 1000) return `${Math.round(ms)}ms`;
-    if (ms < 60000) return `${Math.round(ms / 1000)}s`;
-    if (ms < 3600000) return `${Math.round(ms / 60000)}m`;
-    if (ms < 86400000) return `${Math.round(ms / 3600000)}h`;
-    return `${Math.round(ms / 86400000)}d`;
-  }
 }
